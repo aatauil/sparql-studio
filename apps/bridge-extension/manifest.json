@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "SPARQL Studio Bridge",
+  "version": "0.1.0",
+  "description": "Bridge between SPARQL Studio web app and localhost Virtuoso endpoint.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "externally_connectable": {
+    "matches": [
+      "http://localhost/*",
+      "http://127.0.0.1/*"
+    ]
+  },
+  "action": {
+    "default_title": "SPARQL Studio Bridge"
+  }
+}

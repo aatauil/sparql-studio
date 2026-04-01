@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: Inter, system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: #1f2937;
+  background: #f3f4f6;
+}
+
+@layer components {
+  /* ── Buttons ─────────────────────────────────────────────── */
+
+  .btn {
+    @apply border border-gray-500 rounded px-2.5 py-1 bg-gray-50 cursor-pointer text-sm
+           hover:bg-gray-200 disabled:opacity-45
+           focus-visible:outline-2 focus-visible:outline-blue-600 focus-visible:outline-offset-2;
+  }
+
+  .btn-dark {
+    @apply border border-[#555] rounded px-2.5 py-1 bg-[#2d2d2d] text-[#ccc] text-xs
+           cursor-pointer hover:bg-[#3c3c3c] hover:text-white
+           focus-visible:outline-2 focus-visible:outline-blue-600 focus-visible:outline-offset-2;
+  }
+
+  .btn-ghost-sm {
+    @apply border border-gray-300 rounded px-1.5 py-0.5 bg-transparent cursor-pointer text-xs
+           hover:bg-gray-100
+           focus-visible:outline-2 focus-visible:outline-blue-600 focus-visible:outline-offset-2;
+  }
+
+  .btn-list {
+    @apply border border-gray-200 rounded px-2.5 py-1.5 bg-gray-50 cursor-pointer
+           text-left w-full hover:bg-gray-100 text-sm
+           focus-visible:outline-2 focus-visible:outline-blue-600 focus-visible:outline-offset-2;
+  }
+
+  /* ── Form ────────────────────────────────────────────────── */
+
+  .field-label {
+    @apply grid gap-1 mb-2 text-sm;
+  }
+
+  .field-input {
+    @apply border border-gray-400 rounded px-2 py-1.5 w-full
+           focus-visible:outline-2 focus-visible:outline-blue-600 focus-visible:outline-offset-2;
+  }
+
+  /* ── Editor mount target ─────────────────────────────────── */
+
+  .editorHost {
+    @apply flex-1 min-h-0 overflow-auto;
+  }
+}
