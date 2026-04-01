@@ -15,7 +15,8 @@
     "idb": "^8.0.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "sparql-editor": "0.7.0"
+    "react-router": "^7.13.2",
+    "sparql-editor": "0.7.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

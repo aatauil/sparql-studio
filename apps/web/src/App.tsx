@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import { BridgeClient } from "./bridge";
 import {
   historyStore,
@@ -12,15 +13,10 @@ import {
 } from "./storage";
 import { createSparqlEditor } from "sparql-editor";
 import type { SparqlJsonResult } from "@sparql-studio/contracts";
-import { isUri, toCsv } from "./query-utils";
+import { toCsv } from "./query-utils";
 import { SplitLayout } from "./SplitLayout";
-
-const defaultSettings: AppSettings = {
-  key: "settings",
-  endpointUrl: "http://localhost:8890/sparql",
-  extensionId: "",
-  timeoutMs: 15000
-};
+import { useSettings, defaultSettings } from "./hooks/useSettings";
+import { ResultsTable } from "./components/ResultsTable";
 
 const defaultPrefixes: PrefixEntry[] = [
   { prefix: "rdf", iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#", source: "local", updatedAt: Date.now() },
@@ -102,14 +98,14 @@ function Modal({
 
 function App() {
   type ConnectionState = "connected" | "disconnected" | "checking";
+  const navigate = useNavigate();
+  const { settings: loadedSettings, isLoaded: settingsLoaded } = useSettings();
   const [settings, setSettings] = useState(defaultSettings);
   const [queryText, setQueryText] = useState("SELECT * WHERE { ?s ?p ?o } LIMIT 25");
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
   const [history, setHistory] = useState<QueryHistoryEntry[]>([]);
   const [prefixes, setPrefixes] = useState<PrefixEntry[]>([]);
   const [result, setResult] = useState<SparqlJsonResult | null>(null);
-  const [sortBy, setSortBy] = useState<string>("");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [isRunning, setIsRunning] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Ready.");
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
@@ -153,15 +149,14 @@ function App() {
   }, [bridge]);
 
   useEffect(() => {
+    if (!settingsLoaded) return;
+    setSettings(loadedSettings);
+    setSettingsDraft(loadedSettings);
+  }, [settingsLoaded, loadedSettings]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
     (async () => {
-      const existing = await settingsStore.get();
-      if (existing) {
-        setSettings(existing);
-        setSettingsDraft(existing);
-      } else {
-        await settingsStore.set(defaultSettings);
-        setSettingsDraft(defaultSettings);
-      }
       const list = await prefixStore.list();
       if (list.length === 0) {
         for (const prefix of defaultPrefixes) {
@@ -171,9 +166,9 @@ function App() {
       setSavedQueries((await queryStore.list()).sort((a, b) => b.updatedAt - a.updatedAt));
       setHistory((await historyStore.list()).sort((a, b) => b.startedAt - a.startedAt));
       setPrefixes((await prefixStore.list()).sort((a, b) => a.prefix.localeCompare(b.prefix)));
-      await runHealthCheck(existing ?? defaultSettings);
+      await runHealthCheck(loadedSettings);
     })();
-  }, [runHealthCheck]);
+  }, [settingsLoaded, loadedSettings, runHealthCheck]);
 
   async function runQuery() {
     const startedAt = Date.now();
@@ -252,19 +247,6 @@ function App() {
     await settingsStore.set(next);
   }
 
-  const tableColumns = result?.head.vars ?? [];
-  const tableRows = useMemo(() => {
-    const rows = [...(result?.results.bindings ?? [])];
-    if (!sortBy) return rows;
-    rows.sort((left, right) => {
-      const a = left[sortBy]?.value ?? "";
-      const b = right[sortBy]?.value ?? "";
-      const compare = a.localeCompare(b);
-      return sortDir === "asc" ? compare : -compare;
-    });
-    return rows;
-  }, [result, sortBy, sortDir]);
-
   const dotColor =
     connectionState === "connected" ? "bg-green-600" :
     connectionState === "checking"  ? "bg-amber-400" :
@@ -298,73 +280,10 @@ function App() {
       {!result && <p className="p-3 text-gray-500">No results yet.</p>}
       {result && (
         <div className="flex-1 min-h-0 overflow-auto" role="region" aria-label="SPARQL query results">
-          <table className="border-collapse w-full min-w-[600px]">
-            <thead>
-              <tr>
-                {tableColumns.map((column) => (
-                  <th key={column} className="border border-gray-300 p-1.5 text-left">
-                    <button
-                      className="bg-transparent border-none font-semibold cursor-pointer p-0"
-                      onClick={() => {
-                        if (sortBy === column) {
-                          setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
-                        } else {
-                          setSortBy(column);
-                          setSortDir("asc");
-                        }
-                      }}
-                      aria-label={`Sort by ${column}`}
-                    >
-                      {column} {sortBy === column ? (sortDir === "asc" ? "▲" : "▼") : ""}
-                    </button>
-                  </th>
-                ))}
-                <th className="border border-gray-300 p-1.5 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tableRows.map((row, rowIndex) => (
-                <tr key={`row-${rowIndex}`}>
-                  {tableColumns.map((column) => {
-                    const binding = row[column];
-                    const value = binding?.value ?? "";
-                    if (isUri(binding)) {
-                      return (
-                        <td key={column} className="border border-gray-300 p-1.5 align-top">
-                          <a
-                            href={value}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={(e) => {
-                              if (e.altKey) {
-                                e.preventDefault();
-                                setQueryText(`SELECT * WHERE { <${value}> ?p ?o } LIMIT 25`);
-                              }
-                            }}
-                          >
-                            {value}
-                          </a>
-                        </td>
-                      );
-                    }
-                    return <td key={column} className="border border-gray-300 p-1.5 align-top">{value}</td>;
-                  })}
-                  <td className="border border-gray-300 p-1.5 align-top">
-                    <button
-                      className="btn-ghost-sm"
-                      onClick={() => {
-                        const values = tableColumns.map((col) => row[col]?.value ?? "");
-                        void navigator.clipboard.writeText(values.join("\t"));
-                        setStatusMessage("Row copied to clipboard.");
-                      }}
-                    >
-                      Copy row
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ResultsTable
+            result={result}
+            onNavigateToSubject={(uri) => navigate("/subject?uri=" + encodeURIComponent(uri))}
+          />
         </div>
       )}
     </div>
