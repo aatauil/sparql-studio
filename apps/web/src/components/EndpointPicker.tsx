@@ -53,7 +53,7 @@ export function EndpointPicker({ endpoints, activeId, onSelect, onAdd, onRemove 
         onClick={() => setOpen((v) => !v)}
       >
         <span className="truncate text-xs">{active?.label ?? active?.url ?? "Select endpoint"}</span>
-        <span className="shrink-0 text-[0.6rem] opacity-60">▾</span>
+        <i className="ri-arrow-down-s-line shrink-0 opacity-60 text-sm" />
       </button>
 
       {open && (
@@ -81,7 +81,7 @@ export function EndpointPicker({ endpoints, activeId, onSelect, onAdd, onRemove 
                   onClick={(e) => { e.stopPropagation(); onRemove(ep.id); }}
                   title="Remove endpoint"
                 >
-                  ×
+                  <i className="ri-close-line" />
                 </button>
               )}
             </div>

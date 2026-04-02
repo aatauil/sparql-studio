@@ -293,9 +293,9 @@ function App() {
     <div className="h-full flex flex-col overflow-hidden bg-white">
       <div className="shrink-0 flex flex-wrap gap-1.5 px-2.5 py-1.5 border-b border-gray-200 bg-gray-50">
         <button className="btn" onClick={() => setQueryText(applyPrefixes(queryText, prefixes))}>Apply prefixes</button>
-        <button className="btn" onClick={() => void saveCurrentQuery()}>Save query</button>
+        <button className="btn" onClick={() => void saveCurrentQuery()}><i className="ri-save-line" /> Save query</button>
         <button className="btn" disabled={isRunning} onClick={() => void runQuery()}>
-          {isRunning ? "Running..." : "Run query"}
+          <i className={isRunning ? "ri-loader-4-line" : "ri-play-line"} /> {isRunning ? "Running..." : "Run query"}
         </button>
         <button
           className="btn"
@@ -305,7 +305,7 @@ function App() {
             downloadText(`results-${Date.now()}.csv`, toCsv(result), "text/csv;charset=utf-8");
           }}
         >
-          Export CSV
+          <i className="ri-download-2-line" /> Export CSV
         </button>
       </div>
       <SparqlEditorSurface value={queryText} onChange={setQueryText} />
@@ -335,7 +335,7 @@ function App() {
           onClick={() => setSidebarOpen((v) => !v)}
           title={sidebarOpen ? "Hide panel" : "Show panel"}
         >
-          ◧
+          <i className="ri-layout-left-line" />
         </button>
         <span className="font-semibold text-white shrink-0">SPARQL Studio</span>
         <EndpointPicker
@@ -355,7 +355,7 @@ function App() {
         )}
         <div className="ml-auto flex gap-1 shrink-0">
           <button className="btn-dark" onClick={() => setPrefixesOpen(true)}>Prefixes</button>
-          <button className="btn-dark" onClick={() => setSettingsOpen(true)}>Settings</button>
+          <button className="btn-dark" onClick={() => setSettingsOpen(true)}><i className="ri-settings-3-line" /> Settings</button>
         </div>
       </div>
 

@@ -58,6 +58,11 @@ body {
     @apply flex-1 min-h-0 overflow-auto;
   }
 
+  /* Bigger editor font */
+  .editorHost .cm-editor {
+    font-size: 15px;
+  }
+
   /* ── Panel resize handles ────────────────────────────────── */
 
   .splitHandleH {

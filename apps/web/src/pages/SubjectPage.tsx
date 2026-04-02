@@ -39,23 +39,23 @@ export function SubjectPage() {
     { result, isRunning, error }: ReturnType<typeof useExecuteQuery>
   ) {
     return (
-      <section className="flex flex-col min-h-0">
-        <h2 className="text-sm font-semibold px-3 py-2 border-b border-gray-200 bg-gray-50 m-0">
+      <section className="rounded-lg border border-gray-200 bg-white shadow-sm flex flex-col min-h-0">
+        <h2 className="text-sm font-semibold px-4 py-3 border-b border-gray-200 bg-gray-50 rounded-t-lg m-0">
           {label}
         </h2>
         <div className="flex-1 min-h-0 overflow-auto">
-          {isRunning && <p className="p-3 text-gray-500 text-sm">Loading…</p>}
+          {isRunning && <p className="px-4 py-3 text-gray-500 text-sm">Loading…</p>}
           {!isRunning && error && (
-            <p className="p-3 text-red-600 text-sm">{error}</p>
+            <p className="px-4 py-3 text-red-600 text-sm">{error}</p>
           )}
           {!isRunning && !error && result && result.results.bindings.length === 0 && (
-            <p className="p-3 text-gray-500 text-sm">No results.</p>
+            <p className="px-4 py-3 text-gray-500 text-sm">No results.</p>
           )}
           {!isRunning && !error && result && result.results.bindings.length > 0 && (
             <ResultsTable result={result} onNavigateToSubject={handleNavigateToSubject} />
           )}
           {!isRunning && !error && !result && !uri && (
-            <p className="p-3 text-gray-500 text-sm">No subject URI provided.</p>
+            <p className="px-4 py-3 text-gray-500 text-sm">No subject URI provided.</p>
           )}
         </div>
       </section>
@@ -78,7 +78,7 @@ export function SubjectPage() {
           onClick={() => navigate(-1)}
           aria-label="Go back"
         >
-          ← Back
+          <i className="ri-arrow-left-line" /> Back
         </button>
         <span className="font-semibold text-white">Subject</span>
         <span className="text-[#9ca3af] text-xs overflow-hidden text-ellipsis whitespace-nowrap flex-1 min-w-0">
@@ -87,7 +87,7 @@ export function SubjectPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-h-0 flex flex-col divide-y divide-gray-200 overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col gap-4 p-4 overflow-hidden bg-gray-100">
         {renderSection(`Outgoing triples  ·  <${uri}> ?p ?o`, outgoing)}
         {renderSection(`Incoming triples  ·  ?s ?p <${uri}>`, incoming)}
       </div>

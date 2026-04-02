@@ -173,7 +173,7 @@ function SavedQueryItem({
           onClick={(e) => { e.stopPropagation(); onRemove(item.id); }}
           title="Remove saved query"
         >
-          ✕
+          <i className="ri-close-line" />
         </button>
       </div>
       <div className="bg-zinc-200 p-1">
@@ -237,7 +237,7 @@ export function LeftPanel({ history, savedQueries, onLoadQuery, onRemoveSaved, o
           }`}
           onClick={() => setView("history")}
         >
-          History
+          <i className="ri-history-line" /> History
         </button>
         <button
           className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
@@ -247,14 +247,14 @@ export function LeftPanel({ history, savedQueries, onLoadQuery, onRemoveSaved, o
           }`}
           onClick={() => setView("saved")}
         >
-          Saved
+          <i className="ri-star-line" /> Saved
         </button>
         <button
-          className="ml-auto px-2 py-1.5 text-gray-400 hover:text-gray-600 text-sm leading-none"
+          className="ml-auto px-2 py-1.5 text-gray-400 hover:text-gray-600 text-base leading-none"
           onClick={onHide}
           title="Hide panel"
         >
-          «
+          <i className="ri-panel-left-close-line" />
         </button>
       </div>
 

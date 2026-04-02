@@ -26,11 +26,11 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
   }, [result, sortBy, sortDir]);
 
   return (
-    <table className="border-collapse w-full min-w-[600px]">
+    <table className="border-collapse w-full min-w-[600px] text-xs leading-snug">
       <thead>
         <tr>
           {columns.map((column) => (
-            <th key={column} className="border border-gray-300 p-1.5 text-left">
+            <th key={column} className="border border-gray-300 px-2 py-[3px] text-left">
               <button
                 className="bg-transparent border-none font-semibold cursor-pointer p-0"
                 onClick={() => {
@@ -43,11 +43,11 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
                 }}
                 aria-label={`Sort by ${column}`}
               >
-                {column} {sortBy === column ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                {column} {sortBy === column ? <i className={sortDir === "asc" ? "ri-arrow-up-s-fill" : "ri-arrow-down-s-fill"} /> : ""}
               </button>
             </th>
           ))}
-          <th className="border border-gray-300 p-1.5 text-left">Actions</th>
+          <th className="border border-gray-300 px-2 py-[3px] text-left">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -58,7 +58,7 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
               const value = binding?.value ?? "";
               if (isUri(binding)) {
                 return (
-                  <td key={column} className="border border-gray-300 p-1.5 align-top">
+                  <td key={column} className="border border-gray-300 px-2 py-[3px] align-top">
                     <span className="flex items-center gap-1 flex-wrap">
                       <a href={value} target="_blank" rel="noreferrer" className="break-all">
                         {value}
@@ -68,19 +68,19 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
                         title="Open subject page"
                         onClick={() => onNavigateToSubject(value)}
                       >
-                        ↗
+                        <i className="ri-external-link-line" />
                       </button>
                     </span>
                   </td>
                 );
               }
               return (
-                <td key={column} className="border border-gray-300 p-1.5 align-top">
+                <td key={column} className="border border-gray-300 px-2 py-[3px] align-top">
                   {value}
                 </td>
               );
             })}
-            <td className="border border-gray-300 p-1.5 align-top">
+            <td className="border border-gray-300 px-2 py-[3px] align-top">
               <button
                 className="btn-ghost-sm"
                 onClick={() => {
