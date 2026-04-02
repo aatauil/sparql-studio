@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { BridgeClient } from "./bridge";
 import {
+  endpointStore,
   prefixStore,
   queryStore,
   settingsStore,
-  type AppSettings,
+  type EndpointEntry,
   type PrefixEntry,
   type QueryHistoryEntry,
   type SavedQuery
@@ -13,11 +14,14 @@ import {
 import { createSparqlEditor } from "sparql-editor";
 import type { SparqlJsonResult } from "@sparql-studio/contracts";
 import { toCsv } from "./query-utils";
+import { directFetch, isLocalhostUrl, normalizeEndpointUrl } from "./sparql-fetch";
 import { SplitLayout } from "./SplitLayout";
 import { useSettings, defaultSettings } from "./hooks/useSettings";
 import { useHistoryManager } from "./hooks/useHistoryManager";
 import { ResultsTable } from "./components/ResultsTable";
 import { HistorySidebar } from "./components/HistorySidebar";
+import { EndpointPicker } from "./components/EndpointPicker";
+import { LocalhostBridgeModal } from "./components/LocalhostBridgeModal";
 import { Group as PanelGroup, Panel, Separator } from "react-resizable-panels";
 
 const CURRENT_QUERY_KEY = "sparql-studio:currentQuery";
@@ -102,11 +106,12 @@ function Modal({
 }
 
 function App() {
-  type ConnectionState = "connected" | "disconnected" | "checking";
   const navigate = useNavigate();
   const { settings: loadedSettings, isLoaded: settingsLoaded } = useSettings();
   const { history, addEntry } = useHistoryManager();
   const [settings, setSettings] = useState(defaultSettings);
+  const [endpoints, setEndpoints] = useState<EndpointEntry[]>([]);
+  const [activeEndpointId, setActiveEndpointId] = useState<string>(defaultSettings.activeEndpointId);
   const [queryText, setQueryText] = useState(
     () => localStorage.getItem(CURRENT_QUERY_KEY) ?? DEFAULT_QUERY
   );
@@ -115,14 +120,13 @@ function App() {
   const [result, setResult] = useState<SparqlJsonResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Ready.");
-  const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
-  const [connectionMessage, setConnectionMessage] = useState("Connection not checked yet.");
-  const [connectionModalOpen, setConnectionModalOpen] = useState(false);
   const [savedQueriesOpen, setSavedQueriesOpen] = useState(false);
   const [prefixesOpen, setPrefixesOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDraft, setSettingsDraft] = useState(defaultSettings);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const bridge = useMemo(() => new BridgeClient({ extensionId: settings.extensionId }), [settings.extensionId]);
+  const [localhostModalOpen, setLocalhostModalOpen] = useState(false);
+  const bridge = useMemo(() => new BridgeClient(settings.extensionId), [settings.extensionId]);
 
   // Persist current query to localStorage on every change
   useEffect(() => {
@@ -132,64 +136,81 @@ function App() {
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setConnectionModalOpen(false);
         setSavedQueriesOpen(false);
         setPrefixesOpen(false);
+        setSettingsOpen(false);
+        setLocalhostModalOpen(false);
       }
     };
     window.addEventListener("keydown", onEscape);
     return () => window.removeEventListener("keydown", onEscape);
   }, []);
 
-  const runHealthCheck = useCallback(async (sourceSettings: AppSettings) => {
-    setConnectionState("checking");
-    bridge.setExtensionId(sourceSettings.extensionId);
-    const response = await bridge.healthCheck({
-      endpointUrl: sourceSettings.endpointUrl,
-      timeoutMs: sourceSettings.timeoutMs
-    });
-    if (response.ok) {
-      setConnectionState("connected");
-      setConnectionMessage("Connected");
-      setStatusMessage("Extension bridge is connected.");
-      return;
-    }
-    setConnectionState("disconnected");
-    setConnectionMessage(response.error.message);
-    setStatusMessage(response.error.message);
-  }, [bridge]);
-
   useEffect(() => {
     if (!settingsLoaded) return;
     setSettings(loadedSettings);
     setSettingsDraft(loadedSettings);
+    setActiveEndpointId(loadedSettings.activeEndpointId);
   }, [settingsLoaded, loadedSettings]);
 
   useEffect(() => {
     if (!settingsLoaded) return;
     (async () => {
-      const list = await prefixStore.list();
-      if (list.length === 0) {
+      const prefixList = await prefixStore.list();
+      if (prefixList.length === 0) {
         for (const prefix of defaultPrefixes) {
           await prefixStore.upsert(prefix);
         }
       }
       setSavedQueries((await queryStore.list()).sort((a, b) => b.updatedAt - a.updatedAt));
       setPrefixes((await prefixStore.list()).sort((a, b) => a.prefix.localeCompare(b.prefix)));
-      await runHealthCheck(loadedSettings);
+      setEndpoints((await endpointStore.list()).sort((a, b) => a.createdAt - b.createdAt));
     })();
-  }, [settingsLoaded, loadedSettings, runHealthCheck]);
+  }, [settingsLoaded]);
 
-  async function runQuery() {
+  const activeEndpoint = endpoints.find((e) => e.id === activeEndpointId);
+
+  async function selectEndpoint(id: string) {
+    setActiveEndpointId(id);
+    const next = { ...settings, activeEndpointId: id };
+    setSettings(next);
+    await settingsStore.set(next);
+  }
+
+  async function addEndpoint(label: string, url: string) {
+    const entry: EndpointEntry = { id: uid(), label, url, createdAt: Date.now() };
+    await endpointStore.upsert(entry);
+    setEndpoints((prev) => [...prev, entry]);
+    await selectEndpoint(entry.id);
+  }
+
+  async function removeEndpoint(id: string) {
+    await endpointStore.remove(id);
+    setEndpoints((prev) => {
+      const next = prev.filter((e) => e.id !== id);
+      if (id === activeEndpointId && next.length > 0) {
+        void selectEndpoint(next[0].id);
+      }
+      return next;
+    });
+  }
+
+  const runQuery = useCallback(async () => {
+    if (!activeEndpoint) return;
     const startedAt = Date.now();
+    const endpointUrl = normalizeEndpointUrl(activeEndpoint.url);
+
+    if (isLocalhostUrl(endpointUrl) && !bridge.isAvailable()) {
+      setLocalhostModalOpen(true);
+      return;
+    }
+
     setIsRunning(true);
     setStatusMessage("Running query...");
-    bridge.setExtensionId(settings.extensionId);
-    const response = await bridge.executeQuery({
-      endpointUrl: settings.endpointUrl,
-      timeoutMs: settings.timeoutMs,
-      query: queryText
-    });
+
+    const response = isLocalhostUrl(endpointUrl)
+      ? await bridge.executeQuery({ endpointUrl, timeoutMs: settings.timeoutMs, query: queryText })
+      : await directFetch(endpointUrl, queryText, settings.timeoutMs);
 
     if (response.ok) {
       const rowCount = response.data.results.bindings.length;
@@ -198,7 +219,7 @@ function App() {
       const entry: QueryHistoryEntry = {
         id: uid(),
         queryText,
-        endpoint: settings.endpointUrl,
+        endpoint: endpointUrl,
         startedAt,
         durationMs: Date.now() - startedAt,
         status: "success",
@@ -211,7 +232,7 @@ function App() {
       const entry: QueryHistoryEntry = {
         id: uid(),
         queryText,
-        endpoint: settings.endpointUrl,
+        endpoint: endpointUrl,
         startedAt,
         durationMs: Date.now() - startedAt,
         status: "error",
@@ -221,7 +242,7 @@ function App() {
       await addEntry(entry);
     }
     setIsRunning(false);
-  }
+  }, [activeEndpoint, bridge, settings.timeoutMs, queryText, addEntry]);
 
   async function saveCurrentQuery() {
     const title = prompt("Name this query")?.trim();
@@ -250,15 +271,20 @@ function App() {
     );
   }
 
-  async function updateSettings(next: AppSettings) {
-    setSettings(next);
-    await settingsStore.set(next);
+  async function verifyBridge(extensionId: string): Promise<boolean> {
+    if (!activeEndpoint || !extensionId) return false;
+    const testBridge = new BridgeClient(extensionId);
+    const response = await testBridge.healthCheck({
+      endpointUrl: normalizeEndpointUrl(activeEndpoint.url),
+      timeoutMs: settings.timeoutMs
+    });
+    if (response.ok) {
+      const next = { ...settings, extensionId };
+      setSettings(next);
+      await settingsStore.set(next);
+    }
+    return response.ok;
   }
-
-  const dotColor =
-    connectionState === "connected" ? "bg-green-600" :
-    connectionState === "checking"  ? "bg-amber-400" :
-                                      "bg-red-600";
 
   const editorSection = (
     <div className="h-full flex flex-col overflow-hidden bg-white">
@@ -300,21 +326,28 @@ function App() {
   return (
     <main className="h-screen overflow-hidden flex flex-col">
       {/* Top toolbar */}
-      <div className="flex items-center gap-3 px-3 py-1.5 bg-[#1e1e1e] text-sm border-b border-[#333] shrink-0">
-        <span className="font-semibold text-white">SPARQL Studio</span>
-        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${dotColor}`} aria-hidden="true" />
-        <span className="text-[#9ca3af] text-xs overflow-hidden text-ellipsis whitespace-nowrap max-w-[300px]">
-          {settings.endpointUrl || defaultSettings.endpointUrl}
-        </span>
-        <div className="ml-auto flex gap-1">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-[#1e1e1e] text-sm border-b border-[#333] shrink-0">
+        <span className="font-semibold text-white shrink-0">SPARQL Studio</span>
+        <EndpointPicker
+          endpoints={endpoints}
+          activeId={activeEndpointId}
+          onSelect={(id) => void selectEndpoint(id)}
+          onAdd={addEndpoint}
+          onRemove={(id) => void removeEndpoint(id)}
+        />
+        {activeEndpoint && isLocalhostUrl(activeEndpoint.url) && (
+          <button
+            className="btn-dark text-xs shrink-0"
+            onClick={() => setLocalhostModalOpen(true)}
+          >
+            {bridge.isAvailable() ? "Bridge active" : "Enable localhost querying"}
+          </button>
+        )}
+        <div className="ml-auto flex gap-1 shrink-0">
           <button className="btn-dark" onClick={() => setSavedQueriesOpen(true)}>Saved queries</button>
-          <button className="btn-dark" onClick={() => setSidebarOpen((v) => !v)}>
-            History
-          </button>
+          <button className="btn-dark" onClick={() => setSidebarOpen((v) => !v)}>History</button>
           <button className="btn-dark" onClick={() => setPrefixesOpen(true)}>Prefixes</button>
-          <button className="btn-dark" onClick={() => setConnectionModalOpen(true)}>
-            {connectionState === "connected" ? "Connection" : "Connect"}
-          </button>
+          <button className="btn-dark" onClick={() => setSettingsOpen(true)}>Settings</button>
         </div>
       </div>
 
@@ -338,51 +371,14 @@ function App() {
         {statusMessage}
       </div>
 
-      {/* Connection modal */}
-      {connectionModalOpen && (
-        <Modal label="Connection settings" onClose={() => setConnectionModalOpen(false)}>
-          <h2 className="mt-0">Connection settings</h2>
-          <label className="field-label">
-            Local endpoint
-            <input
-              className="field-input"
-              autoFocus
-              value={settingsDraft.endpointUrl}
-              onChange={(e) => setSettingsDraft({ ...settingsDraft, endpointUrl: e.target.value })}
-            />
-          </label>
-          <label className="field-label">
-            Bridge extension ID
-            <input
-              className="field-input"
-              value={settingsDraft.extensionId}
-              onChange={(e) => setSettingsDraft({ ...settingsDraft, extensionId: e.target.value })}
-            />
-          </label>
-          <label className="field-label">
-            Timeout (ms)
-            <input
-              className="field-input"
-              type="number"
-              value={settingsDraft.timeoutMs}
-              onChange={(e) => setSettingsDraft({ ...settingsDraft, timeoutMs: Number(e.target.value) })}
-            />
-          </label>
-          <p className="text-gray-500 text-sm">{connectionMessage}</p>
-          <div className="flex flex-wrap gap-2 mt-3">
-            <button
-              className="btn"
-              onClick={async () => {
-                await updateSettings(settingsDraft);
-                await runHealthCheck(settingsDraft);
-                setConnectionModalOpen(false);
-              }}
-            >
-              Save and test connection
-            </button>
-            <button className="btn" onClick={() => setConnectionModalOpen(false)}>Cancel</button>
-          </div>
-        </Modal>
+      {/* Localhost bridge modal */}
+      {localhostModalOpen && activeEndpoint && (
+        <LocalhostBridgeModal
+          endpointUrl={activeEndpoint.url}
+          savedExtensionId={settings.extensionId}
+          onClose={() => setLocalhostModalOpen(false)}
+          onVerify={verifyBridge}
+        />
       )}
 
       {/* Saved queries modal */}
@@ -424,6 +420,37 @@ function App() {
           </ul>
           <div className="flex gap-2 mt-3">
             <button className="btn" onClick={() => setPrefixesOpen(false)}>Close</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Settings modal */}
+      {settingsOpen && (
+        <Modal label="Settings" onClose={() => setSettingsOpen(false)}>
+          <h2 className="mt-0">Settings</h2>
+          <label className="field-label">
+            Query timeout (ms)
+            <input
+              className="field-input"
+              type="number"
+              autoFocus
+              value={settingsDraft.timeoutMs}
+              onChange={(e) => setSettingsDraft({ ...settingsDraft, timeoutMs: Number(e.target.value) })}
+            />
+          </label>
+          <div className="flex gap-2 mt-3">
+            <button
+              className="btn"
+              onClick={async () => {
+                const next = { ...settings, timeoutMs: settingsDraft.timeoutMs };
+                setSettings(next);
+                await settingsStore.set(next);
+                setSettingsOpen(false);
+              }}
+            >
+              Save
+            </button>
+            <button className="btn" onClick={() => setSettingsOpen(false)}>Cancel</button>
           </div>
         </Modal>
       )}

@@ -1,34 +1,31 @@
 import { useMemo, useState } from "react";
 import { BridgeClient } from "../bridge";
-import type { AppSettings } from "../storage";
+import { directFetch, isLocalhostUrl, normalizeEndpointUrl } from "../sparql-fetch";
 import type { SparqlJsonResult } from "@sparql-studio/contracts";
 
-export interface BridgeQueryState {
+export interface ExecuteQueryState {
   result: SparqlJsonResult | null;
   isRunning: boolean;
   error: string | null;
   run: (query: string) => Promise<void>;
 }
 
-export function useBridgeQuery(settings: AppSettings): BridgeQueryState {
+export function useExecuteQuery(endpointUrl: string, timeoutMs: number, extensionId: string): ExecuteQueryState {
   const [result, setResult] = useState<SparqlJsonResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const bridge = useMemo(
-    () => new BridgeClient({ extensionId: settings.extensionId }),
-    [settings.extensionId]
-  );
+  const bridge = useMemo(() => new BridgeClient(extensionId), [extensionId]);
 
   async function run(query: string): Promise<void> {
     setIsRunning(true);
     setError(null);
-    bridge.setExtensionId(settings.extensionId);
-    const response = await bridge.executeQuery({
-      endpointUrl: settings.endpointUrl,
-      timeoutMs: settings.timeoutMs,
-      query
-    });
+
+    const url = normalizeEndpointUrl(endpointUrl);
+    const response = isLocalhostUrl(url)
+      ? await bridge.executeQuery({ endpointUrl: url, timeoutMs, query })
+      : await directFetch(url, query, timeoutMs);
+
     if (response.ok) {
       setResult(response.data);
     } else {

@@ -7,22 +7,25 @@ import {
   type SparqlJsonResult
 } from "@sparql-studio/contracts";
 
-interface BridgeClientOptions {
-  extensionId: string;
-}
-
 export class BridgeClient {
   private extensionId: string;
 
-  constructor(options: BridgeClientOptions) {
-    this.extensionId = options.extensionId;
+  constructor(extensionId = "") {
+    this.extensionId = extensionId;
   }
 
   setExtensionId(extensionId: string) {
     this.extensionId = extensionId;
   }
 
-  private sendMessage<TPayload, TData>(type: "healthCheck" | "executeQuery", payload: TPayload): Promise<BridgeResponse<TData>> {
+  isAvailable(): boolean {
+    return this.extensionId !== "";
+  }
+
+  private sendMessage<TPayload, TData>(
+    type: "healthCheck" | "executeQuery",
+    payload: TPayload
+  ): Promise<BridgeResponse<TData>> {
     const requestId = crypto.randomUUID();
     return new Promise((resolve) => {
       type RuntimeLike = {
