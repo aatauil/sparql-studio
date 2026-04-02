@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useSettings } from "../hooks/useSettings";
-import { useBridgeQuery } from "../hooks/useBridgeQuery";
+import { useExecuteQuery } from "../hooks/useBridgeQuery";
+import { endpointStore } from "../storage";
 import { ResultsTable } from "../components/ResultsTable";
 
 export function SubjectPage() {
@@ -10,17 +11,24 @@ export function SubjectPage() {
   const uri = searchParams.get("uri") ?? "";
 
   const { settings, isLoaded } = useSettings();
-  const outgoing = useBridgeQuery(settings);
-  const incoming = useBridgeQuery(settings);
+  const [endpointUrl, setEndpointUrl] = useState("");
 
   useEffect(() => {
-    if (!isLoaded || !uri) return;
+    if (!isLoaded) return;
+    endpointStore.get(settings.activeEndpointId).then((ep) => setEndpointUrl(ep?.url ?? ""));
+  }, [isLoaded, settings.activeEndpointId]);
+
+  const outgoing = useExecuteQuery(endpointUrl, settings.timeoutMs, settings.extensionId);
+  const incoming = useExecuteQuery(endpointUrl, settings.timeoutMs, settings.extensionId);
+
+  useEffect(() => {
+    if (!isLoaded || !uri || !endpointUrl) return;
     void Promise.all([
       outgoing.run(`SELECT ?p ?o WHERE { <${uri}> ?p ?o }`),
       incoming.run(`SELECT ?s ?p WHERE { ?s ?p <${uri}> }`)
     ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, uri]);
+  }, [isLoaded, uri, endpointUrl]);
 
   function handleNavigateToSubject(targetUri: string) {
     navigate("/subject?uri=" + encodeURIComponent(targetUri));
@@ -28,7 +36,7 @@ export function SubjectPage() {
 
   function renderSection(
     label: string,
-    { result, isRunning, error }: ReturnType<typeof useBridgeQuery>
+    { result, isRunning, error }: ReturnType<typeof useExecuteQuery>
   ) {
     return (
       <section className="flex flex-col min-h-0">

@@ -28,19 +28,27 @@ export interface PrefixEntry {
   updatedAt: number;
 }
 
+export interface EndpointEntry {
+  id: string;
+  label: string;
+  url: string;
+  createdAt: number;
+}
+
 export interface AppSettings {
   key: "settings";
-  endpointUrl: string;
+  activeEndpointId: string;
   extensionId: string;
   timeoutMs: number;
 }
 
-const dbPromise = openDB("sparql-studio", 1, {
+const dbPromise = openDB("sparql-studio", 2, {
   upgrade(db) {
     db.createObjectStore("savedQueries", { keyPath: "id" });
     db.createObjectStore("queryHistory", { keyPath: "id" });
     db.createObjectStore("prefixLibrary", { keyPath: "prefix" });
     db.createObjectStore("appSettings", { keyPath: "key" });
+    db.createObjectStore("endpoints", { keyPath: "id" });
   }
 });
 
@@ -80,6 +88,21 @@ export const prefixStore = {
   },
   async remove(prefix: string): Promise<void> {
     await (await dbPromise).delete("prefixLibrary", prefix);
+  }
+};
+
+export const endpointStore = {
+  async list(): Promise<EndpointEntry[]> {
+    return (await dbPromise).getAll("endpoints");
+  },
+  async get(id: string): Promise<EndpointEntry | undefined> {
+    return (await dbPromise).get("endpoints", id);
+  },
+  async upsert(item: EndpointEntry): Promise<void> {
+    await (await dbPromise).put("endpoints", item);
+  },
+  async remove(id: string): Promise<void> {
+    await (await dbPromise).delete("endpoints", id);
   }
 };
 
