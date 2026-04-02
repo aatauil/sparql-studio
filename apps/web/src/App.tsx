@@ -19,7 +19,7 @@ import { SplitLayout } from "./SplitLayout";
 import { useSettings, defaultSettings } from "./hooks/useSettings";
 import { useHistoryManager } from "./hooks/useHistoryManager";
 import { ResultsTable } from "./components/ResultsTable";
-import { HistorySidebar } from "./components/HistorySidebar";
+import { LeftPanel } from "./components/HistorySidebar";
 import { EndpointPicker } from "./components/EndpointPicker";
 import { LocalhostBridgeModal } from "./components/LocalhostBridgeModal";
 import { Group as PanelGroup, Panel, Separator } from "react-resizable-panels";
@@ -120,7 +120,6 @@ function App() {
   const [result, setResult] = useState<SparqlJsonResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Ready.");
-  const [savedQueriesOpen, setSavedQueriesOpen] = useState(false);
   const [prefixesOpen, setPrefixesOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDraft, setSettingsDraft] = useState(defaultSettings);
@@ -136,7 +135,6 @@ function App() {
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setSavedQueriesOpen(false);
         setPrefixesOpen(false);
         setSettingsOpen(false);
         setLocalhostModalOpen(false);
@@ -260,6 +258,11 @@ function App() {
     setSavedQueries((prev) => [query, ...prev]);
   }
 
+  async function removeSavedQuery(id: string) {
+    await queryStore.remove(id);
+    setSavedQueries((prev) => prev.filter((q) => q.id !== id));
+  }
+
   async function addPrefix() {
     const prefix = prompt("Prefix (e.g. foaf)")?.trim();
     const iri = prompt("IRI (e.g. http://xmlns.com/foaf/0.1/)")?.trim();
@@ -327,6 +330,13 @@ function App() {
     <main className="h-screen overflow-hidden flex flex-col">
       {/* Top toolbar */}
       <div className="flex items-center gap-2 px-3 py-1.5 bg-[#1e1e1e] text-sm border-b border-[#333] shrink-0">
+        <button
+          className="btn-dark shrink-0 text-base leading-none px-2"
+          onClick={() => setSidebarOpen((v) => !v)}
+          title={sidebarOpen ? "Hide panel" : "Show panel"}
+        >
+          ◧
+        </button>
         <span className="font-semibold text-white shrink-0">SPARQL Studio</span>
         <EndpointPicker
           endpoints={endpoints}
@@ -344,8 +354,6 @@ function App() {
           </button>
         )}
         <div className="ml-auto flex gap-1 shrink-0">
-          <button className="btn-dark" onClick={() => setSavedQueriesOpen(true)}>Saved queries</button>
-          <button className="btn-dark" onClick={() => setSidebarOpen((v) => !v)}>History</button>
           <button className="btn-dark" onClick={() => setPrefixesOpen(true)}>Prefixes</button>
           <button className="btn-dark" onClick={() => setSettingsOpen(true)}>Settings</button>
         </div>
@@ -356,7 +364,13 @@ function App() {
         {sidebarOpen && (
           <>
             <Panel defaultSize={25} minSize={15}>
-              <HistorySidebar history={history} />
+              <LeftPanel
+                history={history}
+                savedQueries={savedQueries}
+                onLoadQuery={(text) => setQueryText(text)}
+                onRemoveSaved={(id) => void removeSavedQuery(id)}
+                onHide={() => setSidebarOpen(false)}
+              />
             </Panel>
             <Separator className="splitHandleH" />
           </>
@@ -379,29 +393,6 @@ function App() {
           onClose={() => setLocalhostModalOpen(false)}
           onVerify={verifyBridge}
         />
-      )}
-
-      {/* Saved queries modal */}
-      {savedQueriesOpen && (
-        <Modal label="Saved queries" onClose={() => setSavedQueriesOpen(false)}>
-          <h2 className="mt-0">Saved queries</h2>
-          <ul className="list-none p-0 m-0 grid gap-1.5">
-            {savedQueries.map((item) => (
-              <li key={item.id}>
-                <button
-                  className="btn-list"
-                  onClick={() => { setQueryText(item.queryText); setSavedQueriesOpen(false); }}
-                >
-                  {item.title}
-                </button>
-              </li>
-            ))}
-            {savedQueries.length === 0 && <li className="text-gray-500 text-sm">No saved queries yet.</li>}
-          </ul>
-          <div className="flex gap-2 mt-3">
-            <button className="btn" onClick={() => setSavedQueriesOpen(false)}>Close</button>
-          </div>
-        </Modal>
       )}
 
       {/* Prefixes modal */}

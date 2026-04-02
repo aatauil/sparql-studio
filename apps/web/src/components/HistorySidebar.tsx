@@ -1,10 +1,18 @@
 import { memo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { QueryHistoryEntry } from "../storage";
+import type { QueryHistoryEntry, SavedQuery } from "../storage";
 
-interface HistorySidebarProps {
+type SidebarView = "history" | "saved";
+
+interface LeftPanelProps {
   history: QueryHistoryEntry[];
+  savedQueries: SavedQuery[];
+  onLoadQuery: (queryText: string) => void;
+  onRemoveSaved: (id: string) => void;
+  onHide: () => void;
 }
+
+// ── History ──────────────────────────────────────────────────────────────────
 
 function dateBucket(ts: number): string {
   const now = new Date();
@@ -129,17 +137,134 @@ const HistoryList = memo(function HistoryList({ history }: { history: QueryHisto
   );
 });
 
-export function HistorySidebar({ history }: HistorySidebarProps) {
+// ── Saved queries ─────────────────────────────────────────────────────────────
+
+function SavedQueryItem({
+  item,
+  onLoad,
+  onRemove
+}: {
+  item: SavedQuery;
+  onLoad: (queryText: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+
+  function handleMouseEnter() {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setTooltipPos({ x: rect.right + 8, y: rect.top });
+    }
+  }
+
+  return (
+    <div
+      ref={ref}
+      className="group px-3 py-1.5 border border-gray-200 bg-zinc-100 hover:bg-gray-50 mb-1 cursor-pointer"
+      onClick={() => onLoad(item.queryText)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={() => setTooltipPos(null)}
+    >
+      <div className="flex items-center gap-1.5 mb-0.5">
+        <span className="flex-1 text-[0.72rem] font-medium text-gray-700 truncate">{item.title}</span>
+        <button
+          className="btn-ghost-sm shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-600"
+          onClick={(e) => { e.stopPropagation(); onRemove(item.id); }}
+          title="Remove saved query"
+        >
+          ✕
+        </button>
+      </div>
+      <div className="bg-zinc-200 p-1">
+        <code className="block text-[0.6rem] text-gray-600 leading-snug line-clamp-2 break-all font-mono">
+          {item.queryText.slice(0, 100)}
+        </code>
+      </div>
+      {tooltipPos &&
+        createPortal(
+          <div
+            className="fixed z-50 overflow-auto rounded border border-gray-200 bg-white p-4 shadow-lg pointer-events-none"
+            style={{ left: tooltipPos.x, top: tooltipPos.y }}
+          >
+            <p className="text-[0.65rem] font-semibold text-gray-800 mb-1">{item.title}</p>
+            <pre className="whitespace-pre-wrap text-[0.65rem] text-gray-700 font-mono leading-snug">
+              {item.queryText}
+            </pre>
+          </div>,
+          document.body
+        )}
+    </div>
+  );
+}
+
+const SavedQueriesList = memo(function SavedQueriesList({
+  queries,
+  onLoad,
+  onRemove
+}: {
+  queries: SavedQuery[];
+  onLoad: (queryText: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  if (queries.length === 0) {
+    return <p className="px-3 py-4 text-xs text-gray-400">No saved queries yet.</p>;
+  }
+
+  return (
+    <div className="pt-2">
+      {queries.map((item) => (
+        <SavedQueryItem key={item.id} item={item} onLoad={onLoad} onRemove={onRemove} />
+      ))}
+    </div>
+  );
+});
+
+// ── Left panel ────────────────────────────────────────────────────────────────
+
+export function LeftPanel({ history, savedQueries, onLoadQuery, onRemoveSaved, onHide }: LeftPanelProps) {
+  const [view, setView] = useState<SidebarView>("history");
+
   return (
     <div className="h-full flex flex-col overflow-hidden bg-white border-r border-gray-200">
-      {/* Header */}
-      <div className="shrink-0 px-3 py-1.5 border-b border-gray-200 bg-gray-50">
-        <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">History</span>
+      {/* Tab nav */}
+      <div className="shrink-0 flex items-center border-b border-gray-200 bg-gray-50">
+        <button
+          className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+            view === "history"
+              ? "border-blue-500 text-gray-900"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+          onClick={() => setView("history")}
+        >
+          History
+        </button>
+        <button
+          className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+            view === "saved"
+              ? "border-blue-500 text-gray-900"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+          onClick={() => setView("saved")}
+        >
+          Saved
+        </button>
+        <button
+          className="ml-auto px-2 py-1.5 text-gray-400 hover:text-gray-600 text-sm leading-none"
+          onClick={onHide}
+          title="Hide panel"
+        >
+          «
+        </button>
       </div>
 
-      {/* Scrollable history list */}
+      {/* Content */}
       <div className="flex-1 overflow-y-auto min-h-0">
-        <HistoryList history={history} />
+        {view === "history" ? (
+          <HistoryList history={history} />
+        ) : (
+          <SavedQueriesList queries={savedQueries} onLoad={onLoadQuery} onRemove={onRemoveSaved} />
+        )}
       </div>
     </div>
   );
