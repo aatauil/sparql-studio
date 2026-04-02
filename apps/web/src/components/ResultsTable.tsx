@@ -58,25 +58,48 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
               const value = binding?.value ?? "";
               if (isUri(binding)) {
                 return (
-                  <td key={column} className="border border-gray-300 px-2 py-[3px] align-top">
-                    <span className="flex items-center gap-1 flex-wrap">
-                      <a href={value} target="_blank" rel="noreferrer" className="break-all">
-                        {value}
-                      </a>
+                  <td key={column} className="relative group border border-gray-300 px-2 py-[3px] align-top">
+                    {value}
+                    <div className="absolute top-0 right-0 hidden group-hover:flex gap-0.5 p-0.5">
                       <button
-                        className="btn-ghost-sm shrink-0"
-                        title="Open subject page"
-                        onClick={() => onNavigateToSubject(value)}
+                        className="btn-ghost-sm"
+                        title="Copy to clipboard"
+                        onClick={() => void navigator.clipboard.writeText("<" + value + ">")}
+                      >
+                        <i className="ri-file-copy-line" />
+                      </button>
+                      <button
+                        className="btn-ghost-sm"
+                        title="Open URI in new tab"
+                        onClick={() => window.open(value, "_blank", "noreferrer")}
                       >
                         <i className="ri-external-link-line" />
                       </button>
-                    </span>
+                      <button
+                        className="btn-ghost-sm"
+                        title="Open subject page"
+                        onClick={() => onNavigateToSubject(value)}
+                      >
+                        <i className="ri-article-line" />
+                      </button>
+                    </div>
                   </td>
                 );
               }
               return (
-                <td key={column} className="border border-gray-300 px-2 py-[3px] align-top">
+                <td key={column} className="relative group border border-gray-300 px-2 py-[3px] align-top">
                   {value}
+                  {value && (
+                    <div className="absolute top-0 right-0 hidden group-hover:flex gap-0.5 p-0.5 bg-white/90">
+                      <button
+                        className="btn-ghost-sm"
+                        title="Copy to clipboard"
+                        onClick={() => void navigator.clipboard.writeText(value)}
+                      >
+                        <i className="ri-file-copy-line" />
+                      </button>
+                    </div>
+                  )}
                 </td>
               );
             })}
