@@ -57,4 +57,10 @@ body {
   .editorHost {
     @apply flex-1 min-h-0 overflow-auto;
   }
+
+  /* ── Panel resize handles ────────────────────────────────── */
+
+  .splitHandleH {
+    @apply w-1 bg-gray-200 cursor-col-resize hover:bg-blue-400 transition-colors shrink-0;
+  }
 }

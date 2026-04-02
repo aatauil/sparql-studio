@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { BridgeClient } from "./bridge";
 import {
-  historyStore,
   prefixStore,
   queryStore,
   settingsStore,
@@ -16,7 +15,13 @@ import type { SparqlJsonResult } from "@sparql-studio/contracts";
 import { toCsv } from "./query-utils";
 import { SplitLayout } from "./SplitLayout";
 import { useSettings, defaultSettings } from "./hooks/useSettings";
+import { useHistoryManager } from "./hooks/useHistoryManager";
 import { ResultsTable } from "./components/ResultsTable";
+import { HistorySidebar } from "./components/HistorySidebar";
+import { Group as PanelGroup, Panel, Separator } from "react-resizable-panels";
+
+const CURRENT_QUERY_KEY = "sparql-studio:currentQuery";
+const DEFAULT_QUERY = "SELECT * WHERE { ?s ?p ?o } LIMIT 25";
 
 const defaultPrefixes: PrefixEntry[] = [
   { prefix: "rdf", iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#", source: "local", updatedAt: Date.now() },
@@ -100,10 +105,12 @@ function App() {
   type ConnectionState = "connected" | "disconnected" | "checking";
   const navigate = useNavigate();
   const { settings: loadedSettings, isLoaded: settingsLoaded } = useSettings();
+  const { history, addEntry } = useHistoryManager();
   const [settings, setSettings] = useState(defaultSettings);
-  const [queryText, setQueryText] = useState("SELECT * WHERE { ?s ?p ?o } LIMIT 25");
+  const [queryText, setQueryText] = useState(
+    () => localStorage.getItem(CURRENT_QUERY_KEY) ?? DEFAULT_QUERY
+  );
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
-  const [history, setHistory] = useState<QueryHistoryEntry[]>([]);
   const [prefixes, setPrefixes] = useState<PrefixEntry[]>([]);
   const [result, setResult] = useState<SparqlJsonResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -112,17 +119,21 @@ function App() {
   const [connectionMessage, setConnectionMessage] = useState("Connection not checked yet.");
   const [connectionModalOpen, setConnectionModalOpen] = useState(false);
   const [savedQueriesOpen, setSavedQueriesOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [prefixesOpen, setPrefixesOpen] = useState(false);
   const [settingsDraft, setSettingsDraft] = useState(defaultSettings);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const bridge = useMemo(() => new BridgeClient({ extensionId: settings.extensionId }), [settings.extensionId]);
+
+  // Persist current query to localStorage on every change
+  useEffect(() => {
+    localStorage.setItem(CURRENT_QUERY_KEY, queryText);
+  }, [queryText]);
 
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setConnectionModalOpen(false);
         setSavedQueriesOpen(false);
-        setHistoryOpen(false);
         setPrefixesOpen(false);
       }
     };
@@ -164,7 +175,6 @@ function App() {
         }
       }
       setSavedQueries((await queryStore.list()).sort((a, b) => b.updatedAt - a.updatedAt));
-      setHistory((await historyStore.list()).sort((a, b) => b.startedAt - a.startedAt));
       setPrefixes((await prefixStore.list()).sort((a, b) => a.prefix.localeCompare(b.prefix)));
       await runHealthCheck(loadedSettings);
     })();
@@ -195,8 +205,7 @@ function App() {
         rowCount,
         preview: queryText.slice(0, 120)
       };
-      await historyStore.add(entry);
-      setHistory((prev) => [entry, ...prev]);
+      await addEntry(entry);
     } else {
       setStatusMessage(response.error.message);
       const entry: QueryHistoryEntry = {
@@ -209,8 +218,7 @@ function App() {
         rowCount: 0,
         error: response.error.message
       };
-      await historyStore.add(entry);
-      setHistory((prev) => [entry, ...prev]);
+      await addEntry(entry);
     }
     setIsRunning(false);
   }
@@ -276,7 +284,7 @@ function App() {
   );
 
   const resultsSection = (
-    <div className="h-full flex flex-col overflow-hidden bg-white border-t border-gray-200 bg-zinc-100">
+    <div className="h-full flex flex-col overflow-hidden border-t border-gray-200 bg-zinc-100">
       {!result && <p className="p-3 text-gray-500">No results yet.</p>}
       {result && (
         <div className="flex-1 min-h-0 overflow-auto" role="region" aria-label="SPARQL query results">
@@ -300,7 +308,9 @@ function App() {
         </span>
         <div className="ml-auto flex gap-1">
           <button className="btn-dark" onClick={() => setSavedQueriesOpen(true)}>Saved queries</button>
-          <button className="btn-dark" onClick={() => setHistoryOpen(true)}>History</button>
+          <button className="btn-dark" onClick={() => setSidebarOpen((v) => !v)}>
+            History
+          </button>
           <button className="btn-dark" onClick={() => setPrefixesOpen(true)}>Prefixes</button>
           <button className="btn-dark" onClick={() => setConnectionModalOpen(true)}>
             {connectionState === "connected" ? "Connection" : "Connect"}
@@ -308,7 +318,20 @@ function App() {
         </div>
       </div>
 
-      <SplitLayout top={editorSection} bottom={resultsSection} initialTopSize={60} minTopSize={25} minBottomSize={15} />
+      {/* Main content: history sidebar | editor+results */}
+      <PanelGroup orientation="horizontal" className="flex-1 min-h-0">
+        {sidebarOpen && (
+          <>
+            <Panel defaultSize={25} minSize={15}>
+              <HistorySidebar history={history} />
+            </Panel>
+            <Separator className="splitHandleH" />
+          </>
+        )}
+        <Panel defaultSize={75} minSize={40}>
+          <SplitLayout top={editorSection} bottom={resultsSection} initialTopSize={60} minTopSize={25} minBottomSize={15} />
+        </Panel>
+      </PanelGroup>
 
       {/* Status bar */}
       <div className="shrink-0 bg-[#007acc] text-white text-[0.72rem] px-3 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis" role="status">
@@ -381,29 +404,6 @@ function App() {
           </ul>
           <div className="flex gap-2 mt-3">
             <button className="btn" onClick={() => setSavedQueriesOpen(false)}>Close</button>
-          </div>
-        </Modal>
-      )}
-
-      {/* History modal */}
-      {historyOpen && (
-        <Modal label="Query history" onClose={() => setHistoryOpen(false)}>
-          <h2 className="mt-0">Query history</h2>
-          <ul className="list-none p-0 m-0 grid gap-1.5">
-            {history.slice(0, 20).map((item) => (
-              <li key={item.id}>
-                <button
-                  className="btn-list"
-                  onClick={() => { setQueryText(item.queryText); setHistoryOpen(false); }}
-                >
-                  {new Date(item.startedAt).toLocaleString()} — {item.status} ({item.rowCount} rows)
-                </button>
-              </li>
-            ))}
-            {history.length === 0 && <li className="text-gray-500 text-sm">No query history yet.</li>}
-          </ul>
-          <div className="flex gap-2 mt-3">
-            <button className="btn" onClick={() => setHistoryOpen(false)}>Close</button>
           </div>
         </Modal>
       )}

@@ -22,7 +22,7 @@ export function SplitLayout({
         {top}
       </Panel>
       <Separator className="splitHandle" />
-      <Panel minSize={minBottomSize}>
+      <Panel defaultSize={100 - initialTopSize} minSize={minBottomSize}>
         {bottom}
       </Panel>
     </PanelGroup>

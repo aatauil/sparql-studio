@@ -62,6 +62,12 @@ export const historyStore = {
   },
   async add(item: QueryHistoryEntry): Promise<void> {
     await (await dbPromise).put("queryHistory", item);
+  },
+  async remove(id: string): Promise<void> {
+    await (await dbPromise).delete("queryHistory", id);
+  },
+  async clear(): Promise<void> {
+    await (await dbPromise).clear("queryHistory");
   }
 };
 
