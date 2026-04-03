@@ -28,8 +28,8 @@ const CURRENT_QUERY_KEY = "sparql-studio:currentQuery";
 const DEFAULT_QUERY = "SELECT * WHERE { ?s ?p ?o } LIMIT 25";
 
 const defaultPrefixes: PrefixEntry[] = [
-  { prefix: "rdf", iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#", source: "local", updatedAt: Date.now() },
-  { prefix: "rdfs", iri: "http://www.w3.org/2000/01/rdf-schema#", source: "local", updatedAt: Date.now() }
+  { prefix: "rdf", iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#", source: "local", updatedAt: Date.now(), enabled: true },
+  { prefix: "rdfs", iri: "http://www.w3.org/2000/01/rdf-schema#", source: "local", updatedAt: Date.now(), enabled: true }
 ];
 
 function uid() {
@@ -37,7 +37,9 @@ function uid() {
 }
 
 function applyPrefixes(queryText: string, prefixes: PrefixEntry[]): string {
-  const prefixText = prefixes.map((item) => `PREFIX ${item.prefix}: <${item.iri}>`).join("\n");
+  const active = prefixes.filter((p) => p.enabled !== false);
+  if (active.length === 0) return queryText;
+  const prefixText = active.map((p) => `PREFIX ${p.prefix}: <${p.iri}>`).join("\n");
   return `${prefixText}\n${queryText}`.trim();
 }
 
@@ -120,10 +122,12 @@ function App() {
   const [result, setResult] = useState<SparqlJsonResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Ready.");
-  const [prefixesOpen, setPrefixesOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDraft, setSettingsDraft] = useState(defaultSettings);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [globalPrefixesOn, setGlobalPrefixesOn] = useState(
+    () => localStorage.getItem("sparql-studio:prefixesOn") !== "false"
+  );
   const [localhostModalOpen, setLocalhostModalOpen] = useState(false);
   const bridge = useMemo(() => new BridgeClient(settings.extensionId), [settings.extensionId]);
 
@@ -135,7 +139,6 @@ function App() {
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setPrefixesOpen(false);
         setSettingsOpen(false);
         setLocalhostModalOpen(false);
       }
@@ -206,9 +209,10 @@ function App() {
     setIsRunning(true);
     setStatusMessage("Running query...");
 
+    const queryWithPrefixes = globalPrefixesOn ? applyPrefixes(queryText, prefixes) : queryText;
     const response = isLocalhostUrl(endpointUrl)
-      ? await bridge.executeQuery({ endpointUrl, timeoutMs: settings.timeoutMs, query: queryText })
-      : await directFetch(endpointUrl, queryText, settings.timeoutMs);
+      ? await bridge.executeQuery({ endpointUrl, timeoutMs: settings.timeoutMs, query: queryWithPrefixes })
+      : await directFetch(endpointUrl, queryWithPrefixes, settings.timeoutMs);
 
     if (response.ok) {
       const rowCount = response.data.results.bindings.length;
@@ -240,7 +244,7 @@ function App() {
       await addEntry(entry);
     }
     setIsRunning(false);
-  }, [activeEndpoint, bridge, settings.timeoutMs, queryText, addEntry]);
+  }, [activeEndpoint, bridge, settings.timeoutMs, queryText, prefixes, globalPrefixesOn, addEntry]);
 
   async function saveCurrentQuery() {
     const title = prompt("Name this query")?.trim();
@@ -267,11 +271,27 @@ function App() {
     const prefix = prompt("Prefix (e.g. foaf)")?.trim();
     const iri = prompt("IRI (e.g. http://xmlns.com/foaf/0.1/)")?.trim();
     if (!prefix || !iri) return;
-    const item: PrefixEntry = { prefix, iri, source: "local", updatedAt: Date.now() };
+    const item: PrefixEntry = { prefix, iri, source: "local", updatedAt: Date.now(), enabled: true };
     await prefixStore.upsert(item);
     setPrefixes((prev) =>
       [...prev.filter((e) => e.prefix !== prefix), item].sort((a, b) => a.prefix.localeCompare(b.prefix))
     );
+  }
+
+  async function togglePrefix(prefix: string) {
+    setPrefixes((prev) => {
+      const updated = prev.map((p) =>
+        p.prefix === prefix ? { ...p, enabled: p.enabled === false ? true : false } : p
+      );
+      const item = updated.find((p) => p.prefix === prefix)!;
+      void prefixStore.upsert(item);
+      return updated;
+    });
+  }
+
+  async function removePrefix(prefix: string) {
+    await prefixStore.remove(prefix);
+    setPrefixes((prev) => prev.filter((p) => p.prefix !== prefix));
   }
 
   async function verifyBridge(extensionId: string): Promise<boolean> {
@@ -289,10 +309,17 @@ function App() {
     return response.ok;
   }
 
+  const activePrefixCount = prefixes.filter((p) => p.enabled !== false).length;
+
+  function toggleGlobalPrefixes() {
+    const next = !globalPrefixesOn;
+    setGlobalPrefixesOn(next);
+    localStorage.setItem("sparql-studio:prefixesOn", String(next));
+  }
+
   const editorSection = (
-    <div className="h-full flex flex-col overflow-hidden bg-white">
+    <div className="h-full flex flex-col overflow-hidden bg-white rounded-tr-lg">
       <div className="shrink-0 flex flex-wrap gap-1.5 px-2.5 py-1.5 border-b border-gray-200 bg-gray-50">
-        <button className="btn" onClick={() => setQueryText(applyPrefixes(queryText, prefixes))}>Apply prefixes</button>
         <button className="btn" onClick={() => void saveCurrentQuery()}><i className="ri-save-line" /> Save query</button>
         <button className="btn" disabled={isRunning} onClick={() => void runQuery()}>
           <i className={isRunning ? "ri-loader-4-line" : "ri-play-line"} /> {isRunning ? "Running..." : "Run query"}
@@ -307,6 +334,22 @@ function App() {
         >
           <i className="ri-download-2-line" /> Export CSV
         </button>
+        {prefixes.length > 0 && (
+          <button
+            className={`text-xs rounded px-1.5 py-0.5 shrink-0 self-center border transition-colors ${
+              globalPrefixesOn
+                ? "text-green-700 bg-green-100 border-green-300 hover:bg-green-200"
+                : "text-gray-500 bg-gray-100 border-gray-300 hover:bg-gray-200"
+            }`}
+            onClick={toggleGlobalPrefixes}
+            title={globalPrefixesOn ? "Click to disable all prefixes" : "Click to enable prefixes"}
+          >
+            <i className="ri-braces-line" />{" "}
+            {globalPrefixesOn
+              ? `${activePrefixCount} prefix${activePrefixCount !== 1 ? "es" : ""} active`
+              : "Prefixes off"}
+          </button>
+        )}
       </div>
       <SparqlEditorSurface value={queryText} onChange={setQueryText} />
     </div>
@@ -327,9 +370,9 @@ function App() {
   );
 
   return (
-    <main className="h-screen overflow-hidden flex flex-col">
+    <main className="h-screen overflow-hidden flex flex-col bg-zinc-900 px-2">
       {/* Top toolbar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-[#1e1e1e] text-sm border-b border-[#333] shrink-0">
+      <div className="flex items-center gap-2 px-3 py-1.5 text-sm shrink-0">
         <button
           className="btn-dark shrink-0 text-base leading-none px-2"
           onClick={() => setSidebarOpen((v) => !v)}
@@ -354,21 +397,24 @@ function App() {
           </button>
         )}
         <div className="ml-auto flex gap-1 shrink-0">
-          <button className="btn-dark" onClick={() => setPrefixesOpen(true)}>Prefixes</button>
           <button className="btn-dark" onClick={() => setSettingsOpen(true)}><i className="ri-settings-3-line" /> Settings</button>
         </div>
       </div>
 
       {/* Main content: history sidebar | editor+results */}
-      <PanelGroup orientation="horizontal" className="flex-1 min-h-0">
+      <PanelGroup orientation="horizontal" className="flex-1 min-h-0 rounded-tl-lg">
         {sidebarOpen && (
           <>
             <Panel defaultSize={25} minSize={15}>
               <LeftPanel
                 history={history}
                 savedQueries={savedQueries}
+                prefixes={prefixes}
                 onLoadQuery={(text) => setQueryText(text)}
                 onRemoveSaved={(id) => void removeSavedQuery(id)}
+                onAddPrefix={() => void addPrefix()}
+                onTogglePrefix={(prefix: string) => void togglePrefix(prefix)}
+                onRemovePrefix={(prefix: string) => void removePrefix(prefix)}
                 onHide={() => setSidebarOpen(false)}
               />
             </Panel>
@@ -393,26 +439,6 @@ function App() {
           onClose={() => setLocalhostModalOpen(false)}
           onVerify={verifyBridge}
         />
-      )}
-
-      {/* Prefixes modal */}
-      {prefixesOpen && (
-        <Modal label="Global prefixes" onClose={() => setPrefixesOpen(false)}>
-          <h2 className="mt-0">Global prefixes</h2>
-          <div className="flex gap-2 mb-3">
-            <button className="btn" onClick={() => void addPrefix()}>Add prefix</button>
-          </div>
-          <ul className="list-none p-0 m-0 grid gap-1.5">
-            {prefixes.map((item) => (
-              <li key={item.prefix} className="text-sm">
-                <code>{item.prefix}:</code> &lt;{item.iri}&gt;
-              </li>
-            ))}
-          </ul>
-          <div className="flex gap-2 mt-3">
-            <button className="btn" onClick={() => setPrefixesOpen(false)}>Close</button>
-          </div>
-        </Modal>
       )}
 
       {/* Settings modal */}

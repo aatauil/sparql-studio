@@ -1,14 +1,18 @@
 import { memo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { QueryHistoryEntry, SavedQuery } from "../storage";
+import type { PrefixEntry, QueryHistoryEntry, SavedQuery } from "../storage";
 
-type SidebarView = "history" | "saved";
+type SidebarView = "history" | "saved" | "prefixes";
 
 interface LeftPanelProps {
   history: QueryHistoryEntry[];
   savedQueries: SavedQuery[];
+  prefixes: PrefixEntry[];
   onLoadQuery: (queryText: string) => void;
   onRemoveSaved: (id: string) => void;
+  onAddPrefix: () => void;
+  onTogglePrefix: (prefix: string) => void;
+  onRemovePrefix: (prefix: string) => void;
   onHide: () => void;
 }
 
@@ -220,9 +224,66 @@ const SavedQueriesList = memo(function SavedQueriesList({
   );
 });
 
+// ── Prefixes ──────────────────────────────────────────────────────────────────
+
+function PrefixesList({
+  prefixes,
+  onAdd,
+  onToggle,
+  onRemove
+}: {
+  prefixes: PrefixEntry[];
+  onAdd: () => void;
+  onToggle: (prefix: string) => void;
+  onRemove: (prefix: string) => void;
+}) {
+  return (
+    <div className="pt-2">
+      <div className="px-3 pb-2">
+        <button className="btn w-full text-xs" onClick={onAdd}>
+          <i className="ri-add-line" /> Add prefix
+        </button>
+      </div>
+      {prefixes.length === 0 && (
+        <p className="px-3 py-4 text-xs text-gray-400">No prefixes yet.</p>
+      )}
+      {prefixes.map((item) => {
+        const active = item.enabled !== false;
+        return (
+          <div
+            key={item.prefix}
+            className={`group px-3 py-1.5 border border-gray-200 bg-zinc-100 hover:bg-gray-50 mb-1 flex items-center gap-2 ${!active ? "opacity-50" : ""}`}
+          >
+            <button
+              className={`shrink-0 w-5 h-5 rounded border flex items-center justify-center text-xs transition-colors ${
+                active ? "bg-blue-500 border-blue-500 text-white" : "bg-white border-gray-300 text-transparent"
+              }`}
+              onClick={() => onToggle(item.prefix)}
+              title={active ? "Disable prefix" : "Enable prefix"}
+            >
+              <i className="ri-check-line" />
+            </button>
+            <div className="flex-1 min-w-0">
+              <span className="text-xs font-mono font-medium text-gray-800">{item.prefix}:</span>
+              <span className="text-[0.6rem] text-gray-400 truncate block">{item.iri}</span>
+            </div>
+            <button
+              className="btn-ghost-sm shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-600"
+              onClick={() => onRemove(item.prefix)}
+              title="Remove prefix"
+            >
+              <i className="ri-close-line" />
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Left panel ────────────────────────────────────────────────────────────────
 
-export function LeftPanel({ history, savedQueries, onLoadQuery, onRemoveSaved, onHide }: LeftPanelProps) {
+export function LeftPanel({ history, savedQueries, prefixes, onLoadQuery, onRemoveSaved, onAddPrefix, onTogglePrefix, onRemovePrefix, onHide }: LeftPanelProps) {
   const [view, setView] = useState<SidebarView>("history");
 
   return (
@@ -250,6 +311,16 @@ export function LeftPanel({ history, savedQueries, onLoadQuery, onRemoveSaved, o
           <i className="ri-star-line" /> Saved
         </button>
         <button
+          className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+            view === "prefixes"
+              ? "border-blue-500 text-gray-900"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+          onClick={() => setView("prefixes")}
+        >
+          <i className="ri-braces-line" /> Prefixes
+        </button>
+        <button
           className="ml-auto px-2 py-1.5 text-gray-400 hover:text-gray-600 text-base leading-none"
           onClick={onHide}
           title="Hide panel"
@@ -260,10 +331,15 @@ export function LeftPanel({ history, savedQueries, onLoadQuery, onRemoveSaved, o
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto min-h-0">
-        {view === "history" ? (
-          <HistoryList history={history} />
-        ) : (
-          <SavedQueriesList queries={savedQueries} onLoad={onLoadQuery} onRemove={onRemoveSaved} />
+        {view === "history" && <HistoryList history={history} />}
+        {view === "saved" && <SavedQueriesList queries={savedQueries} onLoad={onLoadQuery} onRemove={onRemoveSaved} />}
+        {view === "prefixes" && (
+          <PrefixesList
+            prefixes={prefixes}
+            onAdd={onAddPrefix}
+            onToggle={onTogglePrefix}
+            onRemove={onRemovePrefix}
+          />
         )}
       </div>
     </div>

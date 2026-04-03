@@ -26,6 +26,7 @@ export interface PrefixEntry {
   iri: string;
   source: "local" | "imported";
   updatedAt: number;
+  enabled?: boolean; // undefined treated as true (backward compatible)
 }
 
 export interface EndpointEntry {
