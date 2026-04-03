@@ -13,12 +13,11 @@ import {
 } from "./storage";
 import { createSparqlEditor } from "sparql-editor";
 import type { SparqlJsonResult } from "@sparql-studio/contracts";
-import { toCsv } from "./query-utils";
 import { directFetch, isLocalhostUrl, normalizeEndpointUrl } from "./sparql-fetch";
 import { SplitLayout } from "./SplitLayout";
 import { useSettings, defaultSettings } from "./hooks/useSettings";
 import { useHistoryManager } from "./hooks/useHistoryManager";
-import { ResultsTable } from "./components/ResultsTable";
+import { ResultsPanel, type ResultMeta } from "./components/ResultsPanel";
 import { LeftPanel } from "./components/HistorySidebar";
 import { EndpointPicker } from "./components/EndpointPicker";
 import { LocalhostBridgeModal } from "./components/LocalhostBridgeModal";
@@ -43,14 +42,6 @@ function applyPrefixes(queryText: string, prefixes: PrefixEntry[]): string {
   return `${prefixText}\n${queryText}`.trim();
 }
 
-function downloadText(filename: string, text: string, mimeType: string): void {
-  const blob = new Blob([text], { type: mimeType });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(link.href);
-}
 
 function SparqlEditorSurface({
   value,
@@ -120,6 +111,7 @@ function App() {
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
   const [prefixes, setPrefixes] = useState<PrefixEntry[]>([]);
   const [result, setResult] = useState<SparqlJsonResult | null>(null);
+  const [resultMeta, setResultMeta] = useState<ResultMeta | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Ready.");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -214,29 +206,32 @@ function App() {
       ? await bridge.executeQuery({ endpointUrl, timeoutMs: settings.timeoutMs, query: queryWithPrefixes })
       : await directFetch(endpointUrl, queryWithPrefixes, settings.timeoutMs);
 
+    const durationMs = Date.now() - startedAt;
     if (response.ok) {
       const rowCount = response.data.results.bindings.length;
       setResult(response.data);
+      setResultMeta({ ok: true, durationMs, rowCount });
       setStatusMessage(`Success: ${rowCount} rows.`);
       const entry: QueryHistoryEntry = {
         id: uid(),
         queryText,
         endpoint: endpointUrl,
         startedAt,
-        durationMs: Date.now() - startedAt,
+        durationMs,
         status: "success",
         rowCount,
         preview: queryText.slice(0, 120)
       };
       await addEntry(entry);
     } else {
+      setResultMeta({ ok: false, durationMs, rowCount: 0, errorCode: response.error.code, errorMessage: response.error.message });
       setStatusMessage(response.error.message);
       const entry: QueryHistoryEntry = {
         id: uid(),
         queryText,
         endpoint: endpointUrl,
         startedAt,
-        durationMs: Date.now() - startedAt,
+        durationMs,
         status: "error",
         rowCount: 0,
         error: response.error.message
@@ -324,16 +319,6 @@ function App() {
         <button className="btn" disabled={isRunning} onClick={() => void runQuery()}>
           <i className={isRunning ? "ri-loader-4-line" : "ri-play-line"} /> {isRunning ? "Running..." : "Run query"}
         </button>
-        <button
-          className="btn"
-          disabled={!result}
-          onClick={() => {
-            if (!result) return;
-            downloadText(`results-${Date.now()}.csv`, toCsv(result), "text/csv;charset=utf-8");
-          }}
-        >
-          <i className="ri-download-2-line" /> Export CSV
-        </button>
         {prefixes.length > 0 && (
           <button
             className={`text-xs rounded px-1.5 py-0.5 shrink-0 self-center border transition-colors ${
@@ -356,17 +341,11 @@ function App() {
   );
 
   const resultsSection = (
-    <div className="h-full flex flex-col overflow-hidden border-t border-gray-200 bg-zinc-100">
-      {!result && <p className="p-3 text-gray-500">No results yet.</p>}
-      {result && (
-        <div className="flex-1 min-h-0 overflow-auto" role="region" aria-label="SPARQL query results">
-          <ResultsTable
-            result={result}
-            onNavigateToSubject={(uri) => navigate("/subject?uri=" + encodeURIComponent(uri))}
-          />
-        </div>
-      )}
-    </div>
+    <ResultsPanel
+      result={result}
+      meta={resultMeta}
+      onNavigateToSubject={(uri) => navigate("/subject?uri=" + encodeURIComponent(uri))}
+    />
   );
 
   return (
