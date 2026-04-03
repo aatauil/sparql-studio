@@ -532,6 +532,13 @@ function App() {
           <i className="ri-layout-left-line" />
         </button>
         <span className="font-semibold text-white shrink-0">SPARQL Studio</span>
+        <button
+          className="btn-dark text-xs shrink-0"
+          onClick={() => navigate("/graphs")}
+          title="Graph Explorer"
+        >
+          <i className="ri-node-tree" /> Graphs
+        </button>
         <EndpointPicker
           endpoints={endpoints}
           activeId={activeEndpointId}
