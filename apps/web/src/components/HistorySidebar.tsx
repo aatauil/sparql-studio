@@ -2,14 +2,29 @@ import { memo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { PrefixEntry, QueryHistoryEntry, SavedQuery } from "../storage";
 
-type SidebarView = "history" | "saved" | "prefixes";
+type SidebarView = "saved" | "history" | "prefixes";
+
+const QUERY_COLORS = [
+  "#6b7280", // gray (default)
+  "#3b82f6", // blue
+  "#10b981", // green
+  "#f59e0b", // amber
+  "#ef4444", // red
+  "#8b5cf6", // violet
+  "#ec4899", // pink
+  "#f97316", // orange
+];
 
 interface LeftPanelProps {
   history: QueryHistoryEntry[];
   savedQueries: SavedQuery[];
+  activeQueryId: string;
   prefixes: PrefixEntry[];
-  onLoadQuery: (queryText: string) => void;
-  onRemoveSaved: (id: string) => void;
+  onNewQuery: () => void;
+  onActivateQuery: (id: string) => void;
+  onRenameQuery: (id: string, title: string) => void;
+  onColorQuery: (id: string, color: string) => void;
+  onDeleteQuery: (id: string) => void;
   onAddPrefix: () => void;
   onTogglePrefix: (prefix: string) => void;
   onRemovePrefix: (prefix: string) => void;
@@ -141,85 +156,222 @@ const HistoryList = memo(function HistoryList({ history }: { history: QueryHisto
   );
 });
 
-// ── Saved queries ─────────────────────────────────────────────────────────────
+// ── Query manager ─────────────────────────────────────────────────────────────
+
+function ColorPicker({
+  current,
+  onPick
+}: {
+  current?: string;
+  onPick: (color: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  function handlePick(color: string) {
+    onPick(color);
+    setOpen(false);
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        className="shrink-0 w-4 h-4 rounded-full border border-white/50 shadow-sm hover:scale-110 transition-transform"
+        style={{ background: current ?? QUERY_COLORS[0] }}
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        title="Change color"
+      />
+      {open && createPortal(
+        <div
+          className="fixed z-50"
+          style={(() => {
+            const r = ref.current?.getBoundingClientRect();
+            return r ? { left: r.right + 4, top: r.top } : {};
+          })()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="bg-white border border-gray-200 rounded shadow-lg p-1.5 grid grid-cols-4 gap-1">
+            {QUERY_COLORS.map((c) => (
+              <button
+                key={c}
+                className="w-5 h-5 rounded-full border-2 hover:scale-110 transition-transform"
+                style={{
+                  background: c,
+                  borderColor: c === (current ?? QUERY_COLORS[0]) ? "white" : "transparent",
+                  outline: c === (current ?? QUERY_COLORS[0]) ? `2px solid ${c}` : "none"
+                }}
+                onClick={() => handlePick(c)}
+                title={c}
+              />
+            ))}
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
 
 function SavedQueryItem({
   item,
-  onLoad,
-  onRemove
+  isActive,
+  onActivate,
+  onRename,
+  onColor,
+  onDelete
 }: {
   item: SavedQuery;
-  onLoad: (queryText: string) => void;
-  onRemove: (id: string) => void;
+  isActive: boolean;
+  onActivate: () => void;
+  onRename: (title: string) => void;
+  onColor: (color: string) => void;
+  onDelete: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(item.title);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const color = item.color ?? QUERY_COLORS[0];
 
-  function handleMouseEnter() {
-    if (ref.current) {
-      const rect = ref.current.getBoundingClientRect();
-      setTooltipPos({ x: rect.right + 8, y: rect.top });
-    }
+  function startEdit(e: React.MouseEvent) {
+    e.stopPropagation();
+    setDraft(item.title);
+    setEditing(true);
+    setTimeout(() => inputRef.current?.select(), 0);
+  }
+
+  function commitRename() {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== item.title) onRename(trimmed);
+    setEditing(false);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter") commitRename();
+    else if (e.key === "Escape") setEditing(false);
+    e.stopPropagation();
   }
 
   return (
     <div
-      ref={ref}
-      className="group px-3 py-1.5 border border-gray-200 bg-zinc-100 hover:bg-gray-50 mb-1 cursor-pointer"
-      onClick={() => onLoad(item.queryText)}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={() => setTooltipPos(null)}
+      className={`group flex items-stretch mb-1 cursor-pointer border transition-colors ${
+        isActive
+          ? "border-blue-300 bg-blue-50 hover:bg-blue-100"
+          : "border-gray-200 bg-zinc-100 hover:bg-gray-50"
+      }`}
+      onClick={onActivate}
     >
-      <div className="flex items-center gap-1.5 mb-0.5">
-        <span className="flex-1 text-[0.72rem] font-medium text-gray-700 truncate">{item.title}</span>
-        <button
-          className="btn-ghost-sm shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-600"
-          onClick={(e) => { e.stopPropagation(); onRemove(item.id); }}
-          title="Remove saved query"
-        >
-          <i className="ri-close-line" />
-        </button>
-      </div>
-      <div className="bg-zinc-200 p-1">
-        <code className="block text-[0.6rem] text-gray-600 leading-snug line-clamp-2 break-all font-mono">
-          {item.queryText.slice(0, 100)}
-        </code>
-      </div>
-      {tooltipPos &&
-        createPortal(
-          <div
-            className="fixed z-50 overflow-auto rounded border border-gray-200 bg-white p-4 shadow-lg pointer-events-none"
-            style={{ left: tooltipPos.x, top: tooltipPos.y }}
-          >
-            <p className="text-[0.65rem] font-semibold text-gray-800 mb-1">{item.title}</p>
-            <pre className="whitespace-pre-wrap text-[0.65rem] text-gray-700 font-mono leading-snug">
-              {item.queryText}
-            </pre>
-          </div>,
-          document.body
+      {/* Color stripe */}
+      <div className="w-1 shrink-0 rounded-l" style={{ background: color }} />
+
+      <div className="flex-1 min-w-0 px-2 py-1.5">
+        {/* Title row */}
+        <div className="flex items-center gap-1 mb-0.5">
+          <ColorPicker current={color} onPick={onColor} />
+
+          {editing ? (
+            <input
+              ref={inputRef}
+              autoFocus
+              className="flex-1 text-[0.72rem] font-medium text-gray-900 bg-white border border-blue-400 rounded px-1 outline-none"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={handleKeyDown}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span
+              className={`flex-1 text-[0.72rem] font-medium truncate ${isActive ? "text-blue-900" : "text-gray-700"}`}
+              onDoubleClick={startEdit}
+              title="Double-click to rename"
+            >
+              {item.title}
+            </span>
+          )}
+
+          {/* Actions — visible on hover */}
+          {!editing && (
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+              <button
+                className="btn-ghost-sm text-gray-400 hover:text-gray-700"
+                onClick={startEdit}
+                title="Rename"
+              >
+                <i className="ri-pencil-line text-[0.65rem]" />
+              </button>
+              <button
+                className="btn-ghost-sm text-red-400 hover:text-red-600"
+                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                title="Delete query"
+              >
+                <i className="ri-close-line" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Query preview */}
+        <div className="bg-white px-1 py-0.5 rounded">
+          <code className="block text-[0.58rem] text-gray-500 leading-snug line-clamp-2 break-all font-mono">
+            {item.queryText.slice(0, 100)}
+          </code>
+        </div>
+
+        {/* Result badge */}
+        {item.lastResultMeta && (
+          <div className="mt-0.5 flex items-center gap-1">
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.lastResultMeta.ok ? "bg-green-500" : "bg-red-500"}`} />
+            <span className="text-[0.58rem] text-gray-400">
+              {item.lastResultMeta.ok
+                ? `${item.lastResultMeta.rowCount} rows`
+                : (item.lastResultMeta.errorMessage ?? "error")}
+            </span>
+          </div>
         )}
+      </div>
     </div>
   );
 }
 
 const SavedQueriesList = memo(function SavedQueriesList({
   queries,
-  onLoad,
-  onRemove
+  activeQueryId,
+  onNewQuery,
+  onActivate,
+  onRename,
+  onColor,
+  onDelete
 }: {
   queries: SavedQuery[];
-  onLoad: (queryText: string) => void;
-  onRemove: (id: string) => void;
+  activeQueryId: string;
+  onNewQuery: () => void;
+  onActivate: (id: string) => void;
+  onRename: (id: string, title: string) => void;
+  onColor: (id: string, color: string) => void;
+  onDelete: (id: string) => void;
 }) {
-  if (queries.length === 0) {
-    return <p className="px-3 py-4 text-xs text-gray-400">No saved queries yet.</p>;
-  }
-
   return (
     <div className="pt-2">
-      {queries.map((item) => (
-        <SavedQueryItem key={item.id} item={item} onLoad={onLoad} onRemove={onRemove} />
-      ))}
+      <div className="px-3 pb-2">
+        <button className="btn w-full text-xs" onClick={onNewQuery}>
+          <i className="ri-add-line" /> New query
+        </button>
+      </div>
+      {queries.length === 0 ? (
+        <p className="px-3 py-4 text-xs text-gray-400">No queries yet.</p>
+      ) : (
+        queries.map((item) => (
+          <SavedQueryItem
+            key={item.id}
+            item={item}
+            isActive={item.id === activeQueryId}
+            onActivate={() => onActivate(item.id)}
+            onRename={(title) => onRename(item.id, title)}
+            onColor={(color) => onColor(item.id, color)}
+            onDelete={() => onDelete(item.id)}
+          />
+        ))
+      )}
     </div>
   );
 });
@@ -283,13 +435,37 @@ function PrefixesList({
 
 // ── Left panel ────────────────────────────────────────────────────────────────
 
-export function LeftPanel({ history, savedQueries, prefixes, onLoadQuery, onRemoveSaved, onAddPrefix, onTogglePrefix, onRemovePrefix, onHide }: LeftPanelProps) {
-  const [view, setView] = useState<SidebarView>("history");
+export function LeftPanel({
+  history,
+  savedQueries,
+  activeQueryId,
+  prefixes,
+  onNewQuery,
+  onActivateQuery,
+  onRenameQuery,
+  onColorQuery,
+  onDeleteQuery,
+  onAddPrefix,
+  onTogglePrefix,
+  onRemovePrefix,
+  onHide
+}: LeftPanelProps) {
+  const [view, setView] = useState<SidebarView>("saved");
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-white border-r border-gray-200">
       {/* Tab nav */}
       <div className="shrink-0 flex items-center border-b border-gray-200 bg-gray-50">
+        <button
+          className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+            view === "saved"
+              ? "border-blue-500 text-gray-900"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+          onClick={() => setView("saved")}
+        >
+          <i className="ri-file-list-3-line" /> Queries
+        </button>
         <button
           className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
             view === "history"
@@ -299,16 +475,6 @@ export function LeftPanel({ history, savedQueries, prefixes, onLoadQuery, onRemo
           onClick={() => setView("history")}
         >
           <i className="ri-history-line" /> History
-        </button>
-        <button
-          className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
-            view === "saved"
-              ? "border-blue-500 text-gray-900"
-              : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-          onClick={() => setView("saved")}
-        >
-          <i className="ri-star-line" /> Saved
         </button>
         <button
           className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
@@ -331,8 +497,18 @@ export function LeftPanel({ history, savedQueries, prefixes, onLoadQuery, onRemo
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto min-h-0">
+        {view === "saved" && (
+          <SavedQueriesList
+            queries={savedQueries}
+            activeQueryId={activeQueryId}
+            onNewQuery={onNewQuery}
+            onActivate={onActivateQuery}
+            onRename={onRenameQuery}
+            onColor={onColorQuery}
+            onDelete={onDeleteQuery}
+          />
+        )}
         {view === "history" && <HistoryList history={history} />}
-        {view === "saved" && <SavedQueriesList queries={savedQueries} onLoad={onLoadQuery} onRemove={onRemoveSaved} />}
         {view === "prefixes" && (
           <PrefixesList
             prefixes={prefixes}

@@ -9,6 +9,7 @@ import {
   type EndpointEntry,
   type PrefixEntry,
   type QueryHistoryEntry,
+  type ResultMeta,
   type SavedQuery
 } from "./storage";
 import { createSparqlEditor } from "sparql-editor";
@@ -18,13 +19,14 @@ import { directFetch, isLocalhostUrl, normalizeEndpointUrl } from "./sparql-fetc
 import { SplitLayout } from "./SplitLayout";
 import { useSettings, defaultSettings } from "./hooks/useSettings";
 import { useHistoryManager } from "./hooks/useHistoryManager";
-import { ResultsPanel, type ResultMeta } from "./components/ResultsPanel";
+import { ResultsPanel } from "./components/ResultsPanel";
 import { LeftPanel } from "./components/HistorySidebar";
 import { EndpointPicker } from "./components/EndpointPicker";
 import { LocalhostBridgeModal } from "./components/LocalhostBridgeModal";
 import { Group as PanelGroup, Panel, Separator } from "react-resizable-panels";
 
 const CURRENT_QUERY_KEY = "sparql-studio:currentQuery";
+const ACTIVE_QUERY_KEY = "sparql-studio:activeQueryId";
 const DEFAULT_QUERY = "SELECT * WHERE { ?s ?p ?o } LIMIT 25";
 
 const defaultPrefixes: PrefixEntry[] = [
@@ -112,24 +114,13 @@ function App() {
   const [queryText, setQueryText] = useState(
     () => localStorage.getItem(CURRENT_QUERY_KEY) ?? DEFAULT_QUERY
   );
+  const [activeQueryId, setActiveQueryId] = useState<string>(
+    () => localStorage.getItem(ACTIVE_QUERY_KEY) ?? ""
+  );
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
   const [prefixes, setPrefixes] = useState<PrefixEntry[]>([]);
-  const [result, setResult] = useState<SparqlJsonResult | null>(() => {
-    try {
-      const raw = localStorage.getItem("sparql-studio:lastResult");
-      return raw ? (JSON.parse(raw) as SparqlJsonResult) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [resultMeta, setResultMeta] = useState<ResultMeta | null>(() => {
-    try {
-      const raw = localStorage.getItem("sparql-studio:lastResultMeta");
-      return raw ? (JSON.parse(raw) as ResultMeta) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [result, setResult] = useState<SparqlJsonResult | null>(null);
+  const [resultMeta, setResultMeta] = useState<ResultMeta | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Ready.");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -141,20 +132,28 @@ function App() {
   const [localhostModalOpen, setLocalhostModalOpen] = useState(false);
   const bridge = useMemo(() => new BridgeClient(settings.extensionId), [settings.extensionId]);
 
-  // Persist current query to localStorage on every change
+  // Refs to avoid stale closures in debounced callbacks
+  const activeQueryIdRef = useRef(activeQueryId);
+  useEffect(() => { activeQueryIdRef.current = activeQueryId; }, [activeQueryId]);
+  const savedQueriesRef = useRef<SavedQuery[]>([]);
+  useEffect(() => { savedQueriesRef.current = savedQueries; }, [savedQueries]);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Persist current query text to localStorage + debounce-save to IDB
   useEffect(() => {
     localStorage.setItem(CURRENT_QUERY_KEY, queryText);
-  }, [queryText]);
-
-  useEffect(() => {
-    if (result) localStorage.setItem("sparql-studio:lastResult", JSON.stringify(result));
-    else localStorage.removeItem("sparql-studio:lastResult");
-  }, [result]);
-
-  useEffect(() => {
-    if (resultMeta) localStorage.setItem("sparql-studio:lastResultMeta", JSON.stringify(resultMeta));
-    else localStorage.removeItem("sparql-studio:lastResultMeta");
-  }, [resultMeta]);
+    const id = activeQueryIdRef.current;
+    if (!id) return;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      const now = Date.now();
+      setSavedQueries((prev) =>
+        prev.map((q) => (q.id === id ? { ...q, queryText, updatedAt: now } : q))
+      );
+      const q = savedQueriesRef.current.find((x) => x.id === id);
+      if (q) void queryStore.upsert({ ...q, queryText, updatedAt: now });
+    }, 500);
+  }, [queryText]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
@@ -183,13 +182,142 @@ function App() {
           await prefixStore.upsert(prefix);
         }
       }
-      setSavedQueries((await queryStore.list()).sort((a, b) => b.updatedAt - a.updatedAt));
+
+      let queries = (await queryStore.list()).sort((a, b) => b.updatedAt - a.updatedAt);
+
+      // Ensure there's always at least one query
+      if (queries.length === 0) {
+        const now = Date.now();
+        const defaultQuery: SavedQuery = {
+          id: uid(),
+          title: "Untitled",
+          queryText: localStorage.getItem(CURRENT_QUERY_KEY) ?? DEFAULT_QUERY,
+          tags: [],
+          createdAt: now,
+          updatedAt: now
+        };
+        await queryStore.upsert(defaultQuery);
+        queries = [defaultQuery];
+      }
+
+      setSavedQueries(queries);
+
+      // Resolve which query is active
+      const storedId = localStorage.getItem(ACTIVE_QUERY_KEY) ?? "";
+      const active = queries.find((q) => q.id === storedId) ?? queries[0];
+      setActiveQueryId(active.id);
+      localStorage.setItem(ACTIVE_QUERY_KEY, active.id);
+      setQueryText(active.queryText);
+      localStorage.setItem(CURRENT_QUERY_KEY, active.queryText);
+      setResult(active.lastResult ?? null);
+      setResultMeta(active.lastResultMeta ?? null);
+
       setPrefixes((await prefixStore.list()).sort((a, b) => a.prefix.localeCompare(b.prefix)));
       setEndpoints((await endpointStore.list()).sort((a, b) => a.createdAt - b.createdAt));
     })();
   }, [settingsLoaded]);
 
   const activeEndpoint = endpoints.find((e) => e.id === activeEndpointId);
+
+  // ── Query switching helpers ───────────────────────────────────────────────
+
+  async function flushCurrentQuery() {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    const id = activeQueryIdRef.current;
+    if (!id) return;
+    const q = savedQueriesRef.current.find((x) => x.id === id);
+    if (!q) return;
+    const now = Date.now();
+    const updated = { ...q, queryText: localStorage.getItem(CURRENT_QUERY_KEY) ?? q.queryText, updatedAt: now };
+    setSavedQueries((prev) => prev.map((x) => (x.id === id ? updated : x)));
+    await queryStore.upsert(updated);
+  }
+
+  async function switchQuery(id: string) {
+    await flushCurrentQuery();
+    const target = savedQueriesRef.current.find((q) => q.id === id);
+    if (!target) return;
+    setActiveQueryId(id);
+    localStorage.setItem(ACTIVE_QUERY_KEY, id);
+    setQueryText(target.queryText);
+    localStorage.setItem(CURRENT_QUERY_KEY, target.queryText);
+    setResult(target.lastResult ?? null);
+    setResultMeta(target.lastResultMeta ?? null);
+  }
+
+  async function newQuery() {
+    await flushCurrentQuery();
+    const id = uid();
+    const now = Date.now();
+    const query: SavedQuery = {
+      id,
+      title: "Untitled",
+      queryText: DEFAULT_QUERY,
+      tags: [],
+      createdAt: now,
+      updatedAt: now
+    };
+    await queryStore.upsert(query);
+    setSavedQueries((prev) => [query, ...prev]);
+    setActiveQueryId(id);
+    localStorage.setItem(ACTIVE_QUERY_KEY, id);
+    setQueryText(DEFAULT_QUERY);
+    localStorage.setItem(CURRENT_QUERY_KEY, DEFAULT_QUERY);
+    setResult(null);
+    setResultMeta(null);
+  }
+
+  async function renameQuery(id: string, title: string) {
+    setSavedQueries((prev) => {
+      const updated = prev.map((q) => (q.id === id ? { ...q, title } : q));
+      const q = updated.find((x) => x.id === id);
+      if (q) void queryStore.upsert(q);
+      return updated;
+    });
+  }
+
+  async function colorQuery(id: string, color: string) {
+    setSavedQueries((prev) => {
+      const updated = prev.map((q) => (q.id === id ? { ...q, color } : q));
+      const q = updated.find((x) => x.id === id);
+      if (q) void queryStore.upsert(q);
+      return updated;
+    });
+  }
+
+  async function deleteQuery(id: string) {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    await queryStore.remove(id);
+    const isActive = id === activeQueryIdRef.current;
+    const remaining = savedQueriesRef.current.filter((q) => q.id !== id);
+    setSavedQueries(remaining);
+
+    if (isActive) {
+      if (remaining.length > 0) {
+        const next = remaining[0];
+        setActiveQueryId(next.id);
+        localStorage.setItem(ACTIVE_QUERY_KEY, next.id);
+        setQueryText(next.queryText);
+        localStorage.setItem(CURRENT_QUERY_KEY, next.queryText);
+        setResult(next.lastResult ?? null);
+        setResultMeta(next.lastResultMeta ?? null);
+      } else {
+        // No queries left — create a fresh default
+        const now = Date.now();
+        const fresh: SavedQuery = { id: uid(), title: "Untitled", queryText: DEFAULT_QUERY, tags: [], createdAt: now, updatedAt: now };
+        await queryStore.upsert(fresh);
+        setSavedQueries([fresh]);
+        setActiveQueryId(fresh.id);
+        localStorage.setItem(ACTIVE_QUERY_KEY, fresh.id);
+        setQueryText(DEFAULT_QUERY);
+        localStorage.setItem(CURRENT_QUERY_KEY, DEFAULT_QUERY);
+        setResult(null);
+        setResultMeta(null);
+      }
+    }
+  }
+
+  // ── Endpoints ─────────────────────────────────────────────────────────────
 
   async function selectEndpoint(id: string) {
     setActiveEndpointId(id);
@@ -216,6 +344,8 @@ function App() {
     });
   }
 
+  // ── Query execution ───────────────────────────────────────────────────────
+
   const runQuery = useCallback(async () => {
     if (!activeEndpoint) return;
     const startedAt = Date.now();
@@ -235,11 +365,27 @@ function App() {
       : await directFetch(endpointUrl, queryWithPrefixes, settings.timeoutMs);
 
     const durationMs = Date.now() - startedAt;
+    const id = activeQueryIdRef.current;
+
     if (response.ok) {
       const rowCount = response.data.results.bindings.length;
+      const meta: ResultMeta = { ok: true, durationMs, rowCount };
       setResult(response.data);
-      setResultMeta({ ok: true, durationMs, rowCount });
+      setResultMeta(meta);
       setStatusMessage(`Success: ${rowCount} rows.`);
+
+      // Persist result to active query
+      if (id) {
+        setSavedQueries((prev) => {
+          const updated = prev.map((q) =>
+            q.id === id ? { ...q, lastResult: response.data, lastResultMeta: meta, updatedAt: Date.now() } : q
+          );
+          const q = updated.find((x) => x.id === id);
+          if (q) void queryStore.upsert(q);
+          return updated;
+        });
+      }
+
       const entry: QueryHistoryEntry = {
         id: uid(),
         queryText,
@@ -252,8 +398,22 @@ function App() {
       };
       await addEntry(entry);
     } else {
-      setResultMeta({ ok: false, durationMs, rowCount: 0, errorCode: response.error.code, errorMessage: response.error.message });
+      const meta: ResultMeta = { ok: false, durationMs, rowCount: 0, errorCode: response.error.code, errorMessage: response.error.message };
+      setResultMeta(meta);
       setStatusMessage(response.error.message);
+
+      // Persist error meta to active query
+      if (id) {
+        setSavedQueries((prev) => {
+          const updated = prev.map((q) =>
+            q.id === id ? { ...q, lastResult: undefined, lastResultMeta: meta, updatedAt: Date.now() } : q
+          );
+          const q = updated.find((x) => x.id === id);
+          if (q) void queryStore.upsert(q);
+          return updated;
+        });
+      }
+
       const entry: QueryHistoryEntry = {
         id: uid(),
         queryText,
@@ -269,26 +429,7 @@ function App() {
     setIsRunning(false);
   }, [activeEndpoint, bridge, settings.timeoutMs, queryText, prefixes, globalPrefixesOn, addEntry]);
 
-  async function saveCurrentQuery() {
-    const title = prompt("Name this query")?.trim();
-    if (!title) return;
-    const now = Date.now();
-    const query: SavedQuery = {
-      id: uid(),
-      title,
-      queryText,
-      tags: [],
-      createdAt: now,
-      updatedAt: now
-    };
-    await queryStore.upsert(query);
-    setSavedQueries((prev) => [query, ...prev]);
-  }
-
-  async function removeSavedQuery(id: string) {
-    await queryStore.remove(id);
-    setSavedQueries((prev) => prev.filter((q) => q.id !== id));
-  }
+  // ── Prefixes ──────────────────────────────────────────────────────────────
 
   async function savePrefix(prefix: string, iri: string) {
     const item: PrefixEntry = { prefix, iri, source: "local", updatedAt: Date.now(), enabled: true };
@@ -347,7 +488,6 @@ function App() {
   const editorSection = (
     <div className="h-full flex flex-col overflow-hidden bg-white rounded-tr-lg">
       <div className="shrink-0 flex flex-wrap gap-1.5 px-2.5 py-1.5 border-b border-gray-200 bg-gray-50">
-        <button className="btn" onClick={() => void saveCurrentQuery()}><i className="ri-save-line" /> Save query</button>
         <button className="btn" disabled={isRunning} onClick={() => void runQuery()}>
           <i className={isRunning ? "ri-loader-4-line" : "ri-play-line"} /> {isRunning ? "Running..." : "Run query"}
         </button>
@@ -368,7 +508,7 @@ function App() {
           </button>
         )}
       </div>
-      <SparqlEditorSurface value={queryText} onChange={setQueryText} onAddPrefix={(p, iri) => void savePrefix(p, iri)} />
+      <SparqlEditorSurface key={activeQueryId} value={queryText} onChange={setQueryText} onAddPrefix={(p, iri) => void savePrefix(p, iri)} />
     </div>
   );
 
@@ -376,7 +516,7 @@ function App() {
     <ResultsPanel
       result={result}
       meta={resultMeta}
-      onNavigateToSubject={(uri) => navigate("/subject?uri=" + encodeURIComponent(uri))}
+      onNavigateToSubject={(uri) => navigate("/subject?uri=" + encodeURIComponent(uri), { state: { breadcrumbs: [] } })}
     />
   );
 
@@ -420,9 +560,13 @@ function App() {
               <LeftPanel
                 history={history}
                 savedQueries={savedQueries}
+                activeQueryId={activeQueryId}
                 prefixes={prefixes}
-                onLoadQuery={(text) => setQueryText(text)}
-                onRemoveSaved={(id) => void removeSavedQuery(id)}
+                onNewQuery={() => void newQuery()}
+                onActivateQuery={(id) => void switchQuery(id)}
+                onRenameQuery={(id, title) => void renameQuery(id, title)}
+                onColorQuery={(id, color) => void colorQuery(id, color)}
+                onDeleteQuery={(id) => void deleteQuery(id)}
                 onAddPrefix={() => void addPrefix()}
                 onTogglePrefix={(prefix: string) => void togglePrefix(prefix)}
                 onRemovePrefix={(prefix: string) => void removePrefix(prefix)}

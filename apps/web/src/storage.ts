@@ -1,9 +1,21 @@
 import { openDB } from "idb";
+import type { SparqlJsonResult } from "@sparql-studio/contracts";
+
+export interface ResultMeta {
+  durationMs: number;
+  rowCount: number;
+  ok: boolean;
+  errorCode?: string;
+  errorMessage?: string;
+}
 
 export interface SavedQuery {
   id: string;
   title: string;
   queryText: string;
+  color?: string;
+  lastResult?: SparqlJsonResult;
+  lastResultMeta?: ResultMeta;
   tags: string[];
   createdAt: number;
   updatedAt: number;

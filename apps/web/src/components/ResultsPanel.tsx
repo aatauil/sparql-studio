@@ -2,14 +2,8 @@ import { useState } from "react";
 import type { SparqlJsonResult } from "@sparql-studio/contracts";
 import { toCsv } from "../query-utils";
 import { ResultsTable } from "./ResultsTable";
-
-export interface ResultMeta {
-  durationMs: number;
-  rowCount: number;
-  ok: boolean;
-  errorCode?: string;
-  errorMessage?: string;
-}
+import type { ResultMeta } from "../storage";
+export type { ResultMeta } from "../storage";
 
 interface ResultsPanelProps {
   result: SparqlJsonResult | null;
