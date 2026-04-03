@@ -24,8 +24,8 @@ export function SubjectPage() {
   useEffect(() => {
     if (!isLoaded || !uri || !endpointUrl) return;
     void Promise.all([
-      outgoing.run(`SELECT ?p ?o WHERE { <${uri}> ?p ?o }`),
-      incoming.run(`SELECT ?s ?p WHERE { ?s ?p <${uri}> }`)
+      outgoing.run(`SELECT DISTINCT ?p ?o WHERE { <${uri}> ?p ?o }`),
+      incoming.run(`SELECT DISTINCT ?s ?p WHERE { ?s ?p <${uri}> }`)
     ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, uri, endpointUrl]);
