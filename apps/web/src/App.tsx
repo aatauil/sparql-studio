@@ -12,6 +12,7 @@ import {
   type SavedQuery
 } from "./storage";
 import { createSparqlEditor } from "sparql-editor";
+import { prefixCompletion } from "./extensions/prefixCompletion";
 import type { SparqlJsonResult } from "@sparql-studio/contracts";
 import { directFetch, isLocalhostUrl, normalizeEndpointUrl } from "./sparql-fetch";
 import { SplitLayout } from "./SplitLayout";
@@ -45,10 +46,12 @@ function applyPrefixes(queryText: string, prefixes: PrefixEntry[]): string {
 
 function SparqlEditorSurface({
   value,
-  onChange
+  onChange,
+  onAddPrefix
 }: {
   value: string;
   onChange: (next: string) => void;
+  onAddPrefix?: (prefix: string, iri: string) => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<unknown>(null);
@@ -63,10 +66,11 @@ function SparqlEditorSurface({
       onChange: (next: string, view: unknown) => {
         editorRef.current = view;
         onChange(next);
-      }
+      },
+      extensions: [prefixCompletion(onAddPrefix)]
     });
     editorRef.current = editor;
-  }, [onChange, value]);
+  }, [onChange, value, onAddPrefix]);
 
   return <div className="editorHost" ref={ref} aria-label="SPARQL query editor" />;
 }
@@ -110,8 +114,22 @@ function App() {
   );
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
   const [prefixes, setPrefixes] = useState<PrefixEntry[]>([]);
-  const [result, setResult] = useState<SparqlJsonResult | null>(null);
-  const [resultMeta, setResultMeta] = useState<ResultMeta | null>(null);
+  const [result, setResult] = useState<SparqlJsonResult | null>(() => {
+    try {
+      const raw = localStorage.getItem("sparql-studio:lastResult");
+      return raw ? (JSON.parse(raw) as SparqlJsonResult) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [resultMeta, setResultMeta] = useState<ResultMeta | null>(() => {
+    try {
+      const raw = localStorage.getItem("sparql-studio:lastResultMeta");
+      return raw ? (JSON.parse(raw) as ResultMeta) : null;
+    } catch {
+      return null;
+    }
+  });
   const [isRunning, setIsRunning] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Ready.");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -127,6 +145,16 @@ function App() {
   useEffect(() => {
     localStorage.setItem(CURRENT_QUERY_KEY, queryText);
   }, [queryText]);
+
+  useEffect(() => {
+    if (result) localStorage.setItem("sparql-studio:lastResult", JSON.stringify(result));
+    else localStorage.removeItem("sparql-studio:lastResult");
+  }, [result]);
+
+  useEffect(() => {
+    if (resultMeta) localStorage.setItem("sparql-studio:lastResultMeta", JSON.stringify(resultMeta));
+    else localStorage.removeItem("sparql-studio:lastResultMeta");
+  }, [resultMeta]);
 
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
@@ -262,15 +290,19 @@ function App() {
     setSavedQueries((prev) => prev.filter((q) => q.id !== id));
   }
 
-  async function addPrefix() {
-    const prefix = prompt("Prefix (e.g. foaf)")?.trim();
-    const iri = prompt("IRI (e.g. http://xmlns.com/foaf/0.1/)")?.trim();
-    if (!prefix || !iri) return;
+  async function savePrefix(prefix: string, iri: string) {
     const item: PrefixEntry = { prefix, iri, source: "local", updatedAt: Date.now(), enabled: true };
     await prefixStore.upsert(item);
     setPrefixes((prev) =>
       [...prev.filter((e) => e.prefix !== prefix), item].sort((a, b) => a.prefix.localeCompare(b.prefix))
     );
+  }
+
+  async function addPrefix() {
+    const prefix = prompt("Prefix (e.g. foaf)")?.trim();
+    const iri = prompt("IRI (e.g. http://xmlns.com/foaf/0.1/)")?.trim();
+    if (!prefix || !iri) return;
+    await savePrefix(prefix, iri);
   }
 
   async function togglePrefix(prefix: string) {
@@ -336,7 +368,7 @@ function App() {
           </button>
         )}
       </div>
-      <SparqlEditorSurface value={queryText} onChange={setQueryText} />
+      <SparqlEditorSurface value={queryText} onChange={setQueryText} onAddPrefix={(p, iri) => void savePrefix(p, iri)} />
     </div>
   );
 
