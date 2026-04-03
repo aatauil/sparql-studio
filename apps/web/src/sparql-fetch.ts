@@ -35,10 +35,22 @@ export async function directFetch(
       signal: controller.signal
     });
     if (!res.ok) {
+      let detail = "";
+      try {
+        const body = await res.text();
+        // Virtuoso and many SPARQL endpoints return HTML error pages — extract just the text
+        const stripped = body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+        detail = stripped.length > 300 ? stripped.slice(0, 300) + "…" : stripped;
+      } catch {
+        // ignore body read failures
+      }
+      const message = detail
+        ? `HTTP ${res.status}: ${detail}`
+        : `Endpoint responded with HTTP ${res.status}.`;
       return {
         ok: false,
         requestId,
-        error: { code: "ENDPOINT_UNREACHABLE", message: `Endpoint responded with HTTP ${res.status}.` }
+        error: { code: "INVALID_RESPONSE", message }
       };
     }
     const data: SparqlJsonResult = await res.json();

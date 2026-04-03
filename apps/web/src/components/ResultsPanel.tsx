@@ -37,7 +37,20 @@ export function ResultsPanel({ result, meta, onNavigateToSubject }: ResultsPanel
       ? "Timed out"
       : meta?.errorCode === "ENDPOINT_UNREACHABLE"
         ? "Unreachable"
-        : "Error";
+        : meta?.errorCode === "INVALID_RESPONSE"
+          ? "Query error"
+          : "Error";
+
+  const errorTitle =
+    meta?.errorCode === "TIMEOUT"
+      ? "Query timed out"
+      : meta?.errorCode === "ENDPOINT_UNREACHABLE"
+        ? "Endpoint unreachable"
+        : meta?.errorCode === "EXTENSION_UNAVAILABLE"
+          ? "Extension unavailable"
+          : meta?.errorCode === "INVALID_RESPONSE"
+            ? "Query error"
+            : "Query failed";
 
   return (
     <div className="h-full flex flex-col overflow-hidden border-t border-gray-200 bg-zinc-100">
@@ -113,12 +126,35 @@ export function ResultsPanel({ result, meta, onNavigateToSubject }: ResultsPanel
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-h-0 overflow-auto" role="region" aria-label="SPARQL query results">
-        {!result && <p className="p-3 text-gray-500">No results yet.</p>}
-        {result && view === "table" && (
+      <div className="flex-1 min-h-0 overflow-auto flex flex-col" role="region" aria-label="SPARQL query results">
+        {meta && !meta.ok ? (
+          <div className="flex flex-col items-center justify-center flex-1 gap-3 p-8 text-center">
+            <i className="ri-error-warning-line text-4xl text-red-400" />
+            <div>
+              <p className="text-sm font-medium text-red-700">{errorTitle}</p>
+              {meta.errorMessage && (
+                <p className="mt-1 text-xs text-gray-500">{meta.errorMessage}</p>
+              )}
+            </div>
+            {meta.errorCode && (
+              <span className="text-[0.65rem] font-mono px-2 py-0.5 bg-red-50 text-red-400 rounded border border-red-100">
+                {meta.errorCode}
+              </span>
+            )}
+          </div>
+        ) : result && result.results.bindings.length === 0 ? (
+          <div className="flex flex-col items-center justify-center flex-1 gap-2 p-8 text-center">
+            <i className="ri-inbox-line text-3xl text-gray-300" />
+            <p className="text-sm font-medium text-gray-500">No results found</p>
+            <p className="text-xs text-gray-400">The query ran successfully but returned no rows.</p>
+          </div>
+        ) : !result ? (
+          <div className="flex items-center justify-center flex-1 p-8">
+            <p className="text-sm text-gray-400">Run a query to see results here.</p>
+          </div>
+        ) : view === "table" ? (
           <ResultsTable result={result} onNavigateToSubject={onNavigateToSubject} />
-        )}
-        {result && view === "json" && (
+        ) : (
           <pre className="text-xs p-4 whitespace-pre-wrap break-all">{JSON.stringify(result, null, 2)}</pre>
         )}
       </div>
