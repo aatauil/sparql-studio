@@ -26,7 +26,7 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
   }, [result, sortBy, sortDir]);
 
   return (
-    <table className="border-collapse w-full min-w-[600px] text-xs leading-snug">
+    <table className="border-collapse w-full min-w-[600px] text-s leading-snug">
       <thead>
         <tr>
           {columns.map((column) => (
