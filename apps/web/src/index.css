@@ -68,4 +68,8 @@ body {
   .splitHandleH {
     @apply w-1 bg-gray-200 cursor-col-resize hover:bg-blue-400 transition-colors shrink-0;
   }
+
+  .splitHandle {
+    @apply h-1 bg-gray-200 cursor-row-resize hover:bg-blue-400 transition-colors shrink-0;
+  }
 }
