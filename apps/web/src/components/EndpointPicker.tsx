@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { EndpointEntry } from "../storage";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 interface EndpointPickerProps {
   endpoints: EndpointEntry[];
@@ -27,13 +28,7 @@ export function EndpointPicker({ endpoints, activeId, onSelect, onAdd, onRemove 
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, [open]);
 
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    if (open) document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open]);
+  useEscapeKey(open, () => setOpen(false));
 
   async function handleAdd() {
     const label = addLabel.trim();
