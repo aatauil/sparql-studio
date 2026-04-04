@@ -4,9 +4,7 @@ import { toCsv } from "../query-utils";
 import { ResultsTable } from "./ResultsTable";
 import type { ResultMeta } from "../storage";
 export type { ResultMeta } from "../storage";
-
-const DISPLAY_CAP = 10_000;
-const JSON_CAP = 1_000;
+import { DISPLAY_CAP, JSON_CAP } from "../config";
 
 interface ResultsPanelProps {
   result: SparqlJsonResult | null;

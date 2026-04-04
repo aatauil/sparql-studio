@@ -2,13 +2,12 @@ import { useRef, useMemo, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { SparqlJsonResult } from "@sparql-studio/contracts";
 import { isUri } from "../query-utils";
+import { ESTIMATED_ROW_HEIGHT } from "../config";
 
 interface ResultsTableProps {
   result: SparqlJsonResult;
   onNavigateToSubject: (uri: string) => void;
 }
-
-const ESTIMATED_ROW_HEIGHT = 36;
 
 export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps) {
   const [sortBy, setSortBy] = useState<string>("");
