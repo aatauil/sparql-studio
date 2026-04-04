@@ -1,15 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
-import { useSettings } from "../hooks/useSettings";
+import { useActiveEndpoint } from "../hooks/useActiveEndpoint";
 import { useExecuteQuery } from "../hooks/useBridgeQuery";
-import { endpointStore } from "../storage";
 import { ResultsTable } from "../components/ResultsTable";
 import { useHeapMemory } from "../hooks/useHeapMemory";
 import type { SparqlJsonResult } from "@sparql-studio/contracts";
-
-const SUBJECT_LIMIT = 2000;
-
-const EXCLUDED_GRAPHS_KEY = "sparql-studio:excludedGraphs";
+import { SUBJECT_LIMIT, EXCLUDED_GRAPHS_KEY } from "../config";
 
 function loadExcludedGraphs(): Set<string> {
   try {
@@ -122,15 +118,9 @@ export function SubjectPage() {
   const uri = searchParams.get("uri") ?? "";
   const breadcrumbs: string[] = (location.state as { breadcrumbs?: string[] } | null)?.breadcrumbs ?? [];
 
-  const { settings, isLoaded } = useSettings();
-  const [endpointUrl, setEndpointUrl] = useState("");
+  const { settings, isLoaded, endpointUrl } = useActiveEndpoint();
   const [showGraphs, setShowGraphs] = useState(false);
   const [excludedGraphs, setExcludedGraphs] = useState<Set<string>>(loadExcludedGraphs);
-
-  useEffect(() => {
-    if (!isLoaded) return;
-    endpointStore.get(settings.activeEndpointId).then((ep) => setEndpointUrl(ep?.url ?? ""));
-  }, [isLoaded, settings.activeEndpointId]);
 
   const outgoing = useExecuteQuery(endpointUrl, settings.timeoutMs, settings.extensionId);
   const incoming = useExecuteQuery(endpointUrl, settings.timeoutMs, settings.extensionId);

@@ -1,12 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { useSettings } from "../hooks/useSettings";
+import { useActiveEndpoint } from "../hooks/useActiveEndpoint";
 import { useExecuteQuery } from "../hooks/useBridgeQuery";
-import { endpointStore } from "../storage";
 import { useHeapMemory } from "../hooks/useHeapMemory";
-
-const GRAPH_LIST_LIMIT = 1000;
-const TYPES_LIMIT = 500;
+import { GRAPH_LIST_LIMIT, TYPES_LIMIT } from "../config";
 
 function shortLabel(uri: string): string {
   const afterHash = uri.split("#").pop() ?? "";
@@ -235,13 +232,7 @@ export function GraphExplorerPage() {
   const navigate = useNavigate();
   const graphUri = searchParams.get("g") ?? null;
 
-  const { settings, isLoaded } = useSettings();
-  const [endpointUrl, setEndpointUrl] = useState("");
-
-  useEffect(() => {
-    if (!isLoaded) return;
-    endpointStore.get(settings.activeEndpointId).then((ep) => setEndpointUrl(ep?.url ?? ""));
-  }, [isLoaded, settings.activeEndpointId]);
+  const { settings, isLoaded, endpointUrl } = useActiveEndpoint();
 
   const graphListQuery = useExecuteQuery(endpointUrl, settings.timeoutMs, settings.extensionId);
   const statsQuery = useExecuteQuery(endpointUrl, settings.timeoutMs, settings.extensionId);
