@@ -116,7 +116,8 @@ export function SubjectPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const uri = searchParams.get("uri") ?? "";
-  const breadcrumbs: string[] = (location.state as { breadcrumbs?: string[] } | null)?.breadcrumbs ?? [];
+  const breadcrumbs: string[] = (location.state as { breadcrumbs?: string[]; origin?: string } | null)?.breadcrumbs ?? [];
+  const origin: string = (location.state as { breadcrumbs?: string[]; origin?: string } | null)?.origin ?? "/";
 
   const { settings, isLoaded, endpointUrl } = useActiveEndpoint();
   const [showGraphs, setShowGraphs] = useState(false);
@@ -205,13 +206,13 @@ export function SubjectPage() {
 
   function handleNavigateToSubject(targetUri: string) {
     navigate("/subject?uri=" + encodeURIComponent(targetUri), {
-      state: { breadcrumbs: [...breadcrumbs, uri] }
+      state: { breadcrumbs: [...breadcrumbs, uri], origin }
     });
   }
 
   function handleBreadcrumbClick(index: number) {
     navigate("/subject?uri=" + encodeURIComponent(breadcrumbs[index]), {
-      state: { breadcrumbs: breadcrumbs.slice(0, index) }
+      state: { breadcrumbs: breadcrumbs.slice(0, index), origin }
     });
   }
 
@@ -230,7 +231,15 @@ export function SubjectPage() {
       <div className="flex items-center gap-3 px-3 py-1.5 bg-[#1e1e1e] text-sm border-b border-[#333] shrink-0">
         <button
           className="btn-dark"
-          onClick={() => navigate(-1)}
+          onClick={() => {
+            if (breadcrumbs.length > 0) {
+              navigate("/subject?uri=" + encodeURIComponent(breadcrumbs[breadcrumbs.length - 1]), {
+                state: { breadcrumbs: breadcrumbs.slice(0, -1), origin }
+              });
+            } else {
+              navigate(origin);
+            }
+          }}
           aria-label="Go back"
         >
           <i className="ri-arrow-left-line" /> Back
@@ -256,7 +265,7 @@ export function SubjectPage() {
           <button
             className="hover:text-white shrink-0"
             title="Back to query results"
-            onClick={() => navigate(-breadcrumbs.length - 1)}
+            onClick={() => navigate(origin)}
           >
             <i className="ri-home-4-line" />
           </button>

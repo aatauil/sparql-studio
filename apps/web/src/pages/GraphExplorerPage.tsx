@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { useActiveEndpoint } from "../hooks/useActiveEndpoint";
 import { useExecuteQuery } from "../hooks/useBridgeQuery";
 import { useHeapMemory } from "../hooks/useHeapMemory";
@@ -228,9 +228,8 @@ function GraphDetailView({
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export function GraphExplorerPage() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const graphUri = searchParams.get("g") ?? null;
+  const [graphUri, setGraphUri] = useState<string | null>(null);
 
   const { settings, isLoaded, endpointUrl } = useActiveEndpoint();
 
@@ -257,11 +256,11 @@ export function GraphExplorerPage() {
   }, [isLoaded, endpointUrl, graphUri]);
 
   function handleSelectGraph(uri: string) {
-    navigate("/graphs?g=" + encodeURIComponent(uri));
+    setGraphUri(uri);
   }
 
   function handleNavigateToSubject(uri: string) {
-    navigate("/subject?uri=" + encodeURIComponent(uri), { state: { breadcrumbs: [] } });
+    navigate("/subject?uri=" + encodeURIComponent(uri), { state: { breadcrumbs: [], origin: "/graphs" } });
   }
 
   // Status bar message
@@ -295,7 +294,7 @@ export function GraphExplorerPage() {
       <div className="flex items-center gap-3 px-3 py-1.5 bg-[#1e1e1e] text-sm border-b border-[#333] shrink-0">
         <button
           className="btn-dark"
-          onClick={() => (graphUri ? navigate("/graphs") : navigate(-1))}
+          onClick={() => (graphUri ? setGraphUri(null) : navigate("/"))}
           aria-label="Go back"
         >
           <i className="ri-arrow-left-line" /> Back
