@@ -4,7 +4,10 @@ import { useSettings } from "../hooks/useSettings";
 import { useExecuteQuery } from "../hooks/useBridgeQuery";
 import { endpointStore } from "../storage";
 import { ResultsTable } from "../components/ResultsTable";
+import { useHeapMemory } from "../hooks/useHeapMemory";
 import type { SparqlJsonResult } from "@sparql-studio/contracts";
+
+const SUBJECT_LIMIT = 2000;
 
 const EXCLUDED_GRAPHS_KEY = "sparql-studio:excludedGraphs";
 
@@ -136,13 +139,13 @@ export function SubjectPage() {
     if (!isLoaded || !uri || !endpointUrl) return;
     if (showGraphs) {
       void Promise.all([
-        outgoing.run(`SELECT DISTINCT ?p ?o ?g WHERE { GRAPH ?g { <${uri}> ?p ?o } }`),
-        incoming.run(`SELECT DISTINCT ?s ?p ?g WHERE { GRAPH ?g { ?s ?p <${uri}> } }`)
+        outgoing.run(`SELECT DISTINCT ?p ?o ?g WHERE { GRAPH ?g { <${uri}> ?p ?o } } LIMIT 2000`),
+        incoming.run(`SELECT DISTINCT ?s ?p ?g WHERE { GRAPH ?g { ?s ?p <${uri}> } } LIMIT 2000`)
       ]);
     } else {
       void Promise.all([
-        outgoing.run(`SELECT DISTINCT ?p ?o WHERE { <${uri}> ?p ?o }`),
-        incoming.run(`SELECT DISTINCT ?s ?p WHERE { ?s ?p <${uri}> }`)
+        outgoing.run(`SELECT DISTINCT ?p ?o WHERE { <${uri}> ?p ?o } LIMIT 2000`),
+        incoming.run(`SELECT DISTINCT ?s ?p WHERE { ?s ?p <${uri}> } LIMIT 2000`)
       ]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -168,6 +171,8 @@ export function SubjectPage() {
     const totalCount = query.result?.results.bindings.length ?? null;
     const hiddenCount = totalCount !== null && shownCount !== null ? totalCount - shownCount : 0;
 
+    const isCapped = totalCount === SUBJECT_LIMIT;
+
     return (
       <section className="rounded-lg border border-gray-200 bg-white shadow-sm flex flex-col min-h-0">
         <h2 className="text-sm font-semibold px-4 py-3 border-b border-gray-200 bg-gray-50 rounded-t-lg m-0 flex items-center gap-2">
@@ -178,6 +183,12 @@ export function SubjectPage() {
             </span>
           )}
         </h2>
+        {isCapped && (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border-b border-amber-200 text-amber-800 text-xs">
+            <i className="ri-alert-line" />
+            Showing first {SUBJECT_LIMIT.toLocaleString()} triples. This subject may have more — use the query editor for full results.
+          </div>
+        )}
         {showGraphs && graphs.length > 0 && (
           <GraphFilterBar graphs={graphs} excluded={excludedGraphs} onToggle={toggleExcludedGraph} />
         )}
@@ -214,11 +225,13 @@ export function SubjectPage() {
     });
   }
 
+  const heap = useHeapMemory();
   const outgoingCount = outgoing.result ? filterByGraph(outgoing.result, excludedGraphs).results.bindings.length : null;
   const incomingCount = incoming.result ? filterByGraph(incoming.result, excludedGraphs).results.bindings.length : null;
   const statusParts: string[] = [];
   if (outgoingCount !== null) statusParts.push(`Outgoing: ${outgoingCount} triple${outgoingCount !== 1 ? "s" : ""}`);
   if (incomingCount !== null) statusParts.push(`Incoming: ${incomingCount} triple${incomingCount !== 1 ? "s" : ""}`);
+  if (heap) statusParts.push(`Heap: ${heap.usedMB} MB / ${heap.limitMB} MB`);
   const statusMessage = statusParts.length > 0 ? statusParts.join(" | ") : (outgoing.isRunning || incoming.isRunning ? "Loading…" : "Ready.");
 
   return (

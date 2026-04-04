@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { SparqlJsonResult } from "@sparql-studio/contracts";
 import { toCsv } from "../query-utils";
 import { ResultsTable } from "./ResultsTable";
 import type { ResultMeta } from "../storage";
 export type { ResultMeta } from "../storage";
+
+const DISPLAY_CAP = 10_000;
+const JSON_CAP = 1_000;
 
 interface ResultsPanelProps {
   result: SparqlJsonResult | null;
@@ -45,6 +48,22 @@ export function ResultsPanel({ result, meta, onNavigateToSubject }: ResultsPanel
           : meta?.errorCode === "INVALID_RESPONSE"
             ? "Query error"
             : "Query failed";
+
+  const totalRows = result?.results.bindings.length ?? 0;
+  const isCapped = totalRows > DISPLAY_CAP;
+
+  const cappedResult = useMemo<SparqlJsonResult | null>(() => {
+    if (!result) return null;
+    if (!isCapped) return result;
+    return { ...result, results: { bindings: result.results.bindings.slice(0, DISPLAY_CAP) } };
+  }, [result, isCapped]);
+
+  const jsonText = useMemo(() => {
+    if (!result) return "";
+    if (result.results.bindings.length <= JSON_CAP) return JSON.stringify(result, null, 2);
+    const truncated = { ...result, results: { bindings: result.results.bindings.slice(0, JSON_CAP) } };
+    return JSON.stringify(truncated, null, 2) + `\n\n// … ${result.results.bindings.length - JSON_CAP} more rows truncated for display`;
+  }, [result]);
 
   return (
     <div className="h-full flex flex-col overflow-hidden border-t border-gray-200 bg-zinc-100">
@@ -119,6 +138,14 @@ export function ResultsPanel({ result, meta, onNavigateToSubject }: ResultsPanel
         )}
       </div>
 
+      {/* Large result warning */}
+      {isCapped && (
+        <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-amber-50 border-b border-amber-200 text-amber-800 text-xs">
+          <i className="ri-alert-line" />
+          Query returned {totalRows.toLocaleString()} rows. Displaying first {DISPLAY_CAP.toLocaleString()} only. Add a <code className="bg-amber-100 px-1 rounded">LIMIT</code> clause for better performance.
+        </div>
+      )}
+
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-auto flex flex-col" role="region" aria-label="SPARQL query results">
         {meta && !meta.ok ? (
@@ -147,9 +174,9 @@ export function ResultsPanel({ result, meta, onNavigateToSubject }: ResultsPanel
             <p className="text-sm text-gray-400">Run a query to see results here.</p>
           </div>
         ) : view === "table" ? (
-          <ResultsTable result={result} onNavigateToSubject={onNavigateToSubject} />
+          <ResultsTable result={cappedResult!} onNavigateToSubject={onNavigateToSubject} />
         ) : (
-          <pre className="text-xs p-4 whitespace-pre-wrap break-all">{JSON.stringify(result, null, 2)}</pre>
+          <pre className="text-xs p-4 whitespace-pre-wrap break-all">{jsonText}</pre>
         )}
       </div>
     </div>

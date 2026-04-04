@@ -3,6 +3,10 @@ import { useNavigate, useSearchParams } from "react-router";
 import { useSettings } from "../hooks/useSettings";
 import { useExecuteQuery } from "../hooks/useBridgeQuery";
 import { endpointStore } from "../storage";
+import { useHeapMemory } from "../hooks/useHeapMemory";
+
+const GRAPH_LIST_LIMIT = 1000;
+const TYPES_LIMIT = 500;
 
 function shortLabel(uri: string): string {
   const afterHash = uri.split("#").pop() ?? "";
@@ -34,6 +38,7 @@ function GraphListView({
 }) {
   const rows = query.result?.results.bindings ?? [];
   const count = rows.length;
+  const isCapped = count === GRAPH_LIST_LIMIT;
 
   return (
     <section className="rounded-lg border border-gray-200 bg-white shadow-sm flex flex-col min-h-0 flex-1">
@@ -46,6 +51,12 @@ function GraphListView({
           )}
         </span>
       </h2>
+      {isCapped && (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border-b border-amber-200 text-amber-800 text-xs">
+          <i className="ri-alert-line" />
+          Showing first {GRAPH_LIST_LIMIT.toLocaleString()} graphs. Your database may have more.
+        </div>
+      )}
 
       <div className="flex-1 min-h-0 overflow-auto">
         {query.isRunning && (
@@ -131,6 +142,7 @@ function GraphDetailView({
 
   const typeRows = typesQuery.result?.results.bindings ?? [];
   const typeCount = typeRows.length;
+  const typesCapped = typeCount === TYPES_LIMIT;
 
   return (
     <div className="flex flex-col gap-4 flex-1 min-h-0">
@@ -152,6 +164,12 @@ function GraphDetailView({
             )}
           </span>
         </h2>
+        {typesCapped && (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border-b border-amber-200 text-amber-800 text-xs">
+            <i className="ri-alert-line" />
+            Showing first {TYPES_LIMIT.toLocaleString()} types. This graph may have more.
+          </div>
+        )}
 
         <div className="flex-1 min-h-0 overflow-auto">
           {typesQuery.isRunning && (
@@ -228,19 +246,20 @@ export function GraphExplorerPage() {
   const graphListQuery = useExecuteQuery(endpointUrl, settings.timeoutMs, settings.extensionId);
   const statsQuery = useExecuteQuery(endpointUrl, settings.timeoutMs, settings.extensionId);
   const typesQuery = useExecuteQuery(endpointUrl, settings.timeoutMs, settings.extensionId);
+  const heap = useHeapMemory();
 
   useEffect(() => {
     if (!isLoaded || !endpointUrl) return;
     if (!graphUri) {
       void graphListQuery.run(
-        `SELECT ?g (COUNT(*) AS ?triples) WHERE { GRAPH ?g { ?s ?p ?o } } GROUP BY ?g ORDER BY DESC(?triples)`
+        `SELECT ?g (COUNT(*) AS ?triples) WHERE { GRAPH ?g { ?s ?p ?o } } GROUP BY ?g ORDER BY DESC(?triples) LIMIT ${GRAPH_LIST_LIMIT}`
       );
     } else {
       void statsQuery.run(
         `SELECT (COUNT(*) AS ?triples) (COUNT(DISTINCT ?s) AS ?subjects) (COUNT(DISTINCT ?p) AS ?predicates) WHERE { GRAPH <${graphUri}> { ?s ?p ?o } }`
       );
       void typesQuery.run(
-        `SELECT ?type (COUNT(DISTINCT ?s) AS ?instances) WHERE { GRAPH <${graphUri}> { ?s a ?type } } GROUP BY ?type ORDER BY DESC(?instances)`
+        `SELECT ?type (COUNT(DISTINCT ?s) AS ?instances) WHERE { GRAPH <${graphUri}> { ?s a ?type } } GROUP BY ?type ORDER BY DESC(?instances) LIMIT ${TYPES_LIMIT}`
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -255,23 +274,29 @@ export function GraphExplorerPage() {
   }
 
   // Status bar message
-  let statusMessage = "Ready.";
+  const statusParts: string[] = [];
   if (!graphUri) {
-    if (graphListQuery.isRunning) statusMessage = "Loading graphs…";
+    if (graphListQuery.isRunning) statusParts.push("Loading graphs…");
     else if (graphListQuery.result) {
       const n = graphListQuery.result.results.bindings.length;
-      statusMessage = `${n} named graph${n !== 1 ? "s" : ""} found`;
+      statusParts.push(`${n} named graph${n !== 1 ? "s" : ""} found`);
+    } else {
+      statusParts.push("Ready.");
     }
   } else {
     const running = statsQuery.isRunning || typesQuery.isRunning;
-    if (running) statusMessage = "Loading…";
+    if (running) statusParts.push("Loading…");
     else if (statsQuery.result && typesQuery.result) {
       const statsRow = statsQuery.result.results.bindings[0];
       const triples = statsRow ? parseInt(getBindingValue(statsRow, "triples"), 10) : 0;
       const types = typesQuery.result.results.bindings.length;
-      statusMessage = `${formatCount(triples)} triples · ${types} type${types !== 1 ? "s" : ""}`;
+      statusParts.push(`${formatCount(triples)} triples · ${types} type${types !== 1 ? "s" : ""}`);
+    } else {
+      statusParts.push("Ready.");
     }
   }
+  if (heap) statusParts.push(`Heap: ${heap.usedMB} MB / ${heap.limitMB} MB`);
+  const statusMessage = statusParts.join(" | ");
 
   return (
     <main className="h-screen overflow-hidden flex flex-col">

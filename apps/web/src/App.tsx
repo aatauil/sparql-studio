@@ -19,6 +19,7 @@ import { directFetch, isLocalhostUrl, normalizeEndpointUrl } from "./sparql-fetc
 import { SplitLayout } from "./SplitLayout";
 import { useSettings, defaultSettings } from "./hooks/useSettings";
 import { useHistoryManager } from "./hooks/useHistoryManager";
+import { useHeapMemory } from "./hooks/useHeapMemory";
 import { ResultsPanel } from "./components/ResultsPanel";
 import { LeftPanel } from "./components/HistorySidebar";
 import { EndpointPicker } from "./components/EndpointPicker";
@@ -28,6 +29,7 @@ import { Group as PanelGroup, Panel, Separator } from "react-resizable-panels";
 const CURRENT_QUERY_KEY = "sparql-studio:currentQuery";
 const ACTIVE_QUERY_KEY = "sparql-studio:activeQueryId";
 const DEFAULT_QUERY = "SELECT * WHERE { ?s ?p ?o } LIMIT 25";
+const IDB_RESULT_ROW_CAP = 5_000;
 
 const defaultPrefixes: PrefixEntry[] = [
   { prefix: "rdf", iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#", source: "local", updatedAt: Date.now(), enabled: true },
@@ -130,6 +132,7 @@ function App() {
     () => localStorage.getItem("sparql-studio:prefixesOn") !== "false"
   );
   const [localhostModalOpen, setLocalhostModalOpen] = useState(false);
+  const heap = useHeapMemory();
   const bridge = useMemo(() => new BridgeClient(settings.extensionId), [settings.extensionId]);
 
   // Refs to avoid stale closures in debounced callbacks
@@ -374,11 +377,12 @@ function App() {
       setResultMeta(meta);
       setStatusMessage(`Success: ${rowCount} rows.`);
 
-      // Persist result to active query
+      // Persist result to active query (skip lastResult for large datasets to avoid bloating IDB)
       if (id) {
+        const resultToStore = rowCount <= IDB_RESULT_ROW_CAP ? response.data : undefined;
         setSavedQueries((prev) => {
           const updated = prev.map((q) =>
-            q.id === id ? { ...q, lastResult: response.data, lastResultMeta: meta, updatedAt: Date.now() } : q
+            q.id === id ? { ...q, lastResult: resultToStore, lastResultMeta: meta, updatedAt: Date.now() } : q
           );
           const q = updated.find((x) => x.id === id);
           if (q) void queryStore.upsert(q);
@@ -590,7 +594,7 @@ function App() {
 
       {/* Status bar */}
       <div className="shrink-0 bg-[#007acc] text-white text-[0.72rem] px-3 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis" role="status">
-        {statusMessage}
+        {statusMessage}{heap ? ` | Heap: ${heap.usedMB} MB / ${heap.limitMB} MB` : ""}
       </div>
 
       {/* Localhost bridge modal */}
