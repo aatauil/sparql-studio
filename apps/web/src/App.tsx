@@ -1,16 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { BridgeClient } from "./bridge";
 import {
-  endpointStore,
-  prefixStore,
-  queryStore,
   settingsStore,
-  type EndpointEntry,
-  type PrefixEntry,
   type QueryHistoryEntry,
-  type ResultMeta,
-  type SavedQuery
+  type ResultMeta
 } from "./storage";
 import { createSparqlEditor } from "sparql-editor";
 import { prefixCompletion } from "./extensions/prefixCompletion";
@@ -20,33 +14,16 @@ import { SplitLayout } from "./SplitLayout";
 import { useSettings, defaultSettings } from "./hooks/useSettings";
 import { useHistoryManager } from "./hooks/useHistoryManager";
 import { useHeapMemory } from "./hooks/useHeapMemory";
+import { useEscapeKey } from "./hooks/useEscapeKey";
+import { useQueryManager } from "./hooks/useQueryManager";
+import { usePrefixManager } from "./hooks/usePrefixManager";
+import { useEndpointManager } from "./hooks/useEndpointManager";
 import { ResultsPanel } from "./components/ResultsPanel";
 import { LeftPanel } from "./components/HistorySidebar";
 import { EndpointPicker } from "./components/EndpointPicker";
 import { LocalhostBridgeModal } from "./components/LocalhostBridgeModal";
 import { Group as PanelGroup, Panel, Separator } from "react-resizable-panels";
-
-const CURRENT_QUERY_KEY = "sparql-studio:currentQuery";
-const ACTIVE_QUERY_KEY = "sparql-studio:activeQueryId";
-const DEFAULT_QUERY = "SELECT * WHERE { ?s ?p ?o } LIMIT 25";
-const IDB_RESULT_ROW_CAP = 5_000;
-
-const defaultPrefixes: PrefixEntry[] = [
-  { prefix: "rdf", iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#", source: "local", updatedAt: Date.now(), enabled: true },
-  { prefix: "rdfs", iri: "http://www.w3.org/2000/01/rdf-schema#", source: "local", updatedAt: Date.now(), enabled: true }
-];
-
-function uid() {
-  return crypto.randomUUID();
-}
-
-function applyPrefixes(queryText: string, prefixes: PrefixEntry[]): string {
-  const active = prefixes.filter((p) => p.enabled !== false);
-  if (active.length === 0) return queryText;
-  const prefixText = active.map((p) => `PREFIX ${p.prefix}: <${p.iri}>`).join("\n");
-  return `${prefixText}\n${queryText}`.trim();
-}
-
+import { uid } from "./config";
 
 function SparqlEditorSurface({
   value,
@@ -86,7 +63,7 @@ function Modal({
 }: {
   label: string;
   onClose: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div
@@ -110,249 +87,45 @@ function App() {
   const navigate = useNavigate();
   const { settings: loadedSettings, isLoaded: settingsLoaded } = useSettings();
   const { history, addEntry } = useHistoryManager();
+  const heap = useHeapMemory();
+
   const [settings, setSettings] = useState(defaultSettings);
-  const [endpoints, setEndpoints] = useState<EndpointEntry[]>([]);
-  const [activeEndpointId, setActiveEndpointId] = useState<string>(defaultSettings.activeEndpointId);
-  const [queryText, setQueryText] = useState(
-    () => localStorage.getItem(CURRENT_QUERY_KEY) ?? DEFAULT_QUERY
-  );
-  const [activeQueryId, setActiveQueryId] = useState<string>(
-    () => localStorage.getItem(ACTIVE_QUERY_KEY) ?? ""
-  );
-  const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
-  const [prefixes, setPrefixes] = useState<PrefixEntry[]>([]);
+  const [settingsDraft, setSettingsDraft] = useState(defaultSettings);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [localhostModalOpen, setLocalhostModalOpen] = useState(false);
   const [result, setResult] = useState<SparqlJsonResult | null>(null);
   const [resultMeta, setResultMeta] = useState<ResultMeta | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Ready.");
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsDraft, setSettingsDraft] = useState(defaultSettings);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [globalPrefixesOn, setGlobalPrefixesOn] = useState(
-    () => localStorage.getItem("sparql-studio:prefixesOn") !== "false"
-  );
-  const [localhostModalOpen, setLocalhostModalOpen] = useState(false);
-  const heap = useHeapMemory();
-  const bridge = useMemo(() => new BridgeClient(settings.extensionId), [settings.extensionId]);
 
-  // Refs to avoid stale closures in debounced callbacks
-  const activeQueryIdRef = useRef(activeQueryId);
-  useEffect(() => { activeQueryIdRef.current = activeQueryId; }, [activeQueryId]);
-  const savedQueriesRef = useRef<SavedQuery[]>([]);
-  useEffect(() => { savedQueriesRef.current = savedQueries; }, [savedQueries]);
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Persist current query text to localStorage + debounce-save to IDB
-  useEffect(() => {
-    localStorage.setItem(CURRENT_QUERY_KEY, queryText);
-    const id = activeQueryIdRef.current;
-    if (!id) return;
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => {
-      const now = Date.now();
-      setSavedQueries((prev) =>
-        prev.map((q) => (q.id === id ? { ...q, queryText, updatedAt: now } : q))
-      );
-      const q = savedQueriesRef.current.find((x) => x.id === id);
-      if (q) void queryStore.upsert({ ...q, queryText, updatedAt: now });
-    }, 500);
-  }, [queryText]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    const onEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setSettingsOpen(false);
-        setLocalhostModalOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onEscape);
-    return () => window.removeEventListener("keydown", onEscape);
-  }, []);
-
+  // Sync settings once loaded
   useEffect(() => {
     if (!settingsLoaded) return;
     setSettings(loadedSettings);
     setSettingsDraft(loadedSettings);
-    setActiveEndpointId(loadedSettings.activeEndpointId);
   }, [settingsLoaded, loadedSettings]);
 
-  useEffect(() => {
-    if (!settingsLoaded) return;
-    (async () => {
-      const prefixList = await prefixStore.list();
-      if (prefixList.length === 0) {
-        for (const prefix of defaultPrefixes) {
-          await prefixStore.upsert(prefix);
-        }
-      }
+  const qm = useQueryManager(settingsLoaded);
+  const pm = usePrefixManager(settingsLoaded);
+  const em = useEndpointManager(
+    settingsLoaded,
+    loadedSettings.activeEndpointId,
+    settings,
+    setSettings
+  );
 
-      let queries = (await queryStore.list()).sort((a, b) => b.updatedAt - a.updatedAt);
+  const bridge = useMemo(() => new BridgeClient(settings.extensionId), [settings.extensionId]);
 
-      // Ensure there's always at least one query
-      if (queries.length === 0) {
-        const now = Date.now();
-        const defaultQuery: SavedQuery = {
-          id: uid(),
-          title: "Untitled",
-          queryText: localStorage.getItem(CURRENT_QUERY_KEY) ?? DEFAULT_QUERY,
-          tags: [],
-          createdAt: now,
-          updatedAt: now
-        };
-        await queryStore.upsert(defaultQuery);
-        queries = [defaultQuery];
-      }
-
-      setSavedQueries(queries);
-
-      // Resolve which query is active
-      const storedId = localStorage.getItem(ACTIVE_QUERY_KEY) ?? "";
-      const active = queries.find((q) => q.id === storedId) ?? queries[0];
-      setActiveQueryId(active.id);
-      localStorage.setItem(ACTIVE_QUERY_KEY, active.id);
-      setQueryText(active.queryText);
-      localStorage.setItem(CURRENT_QUERY_KEY, active.queryText);
-      setResult(active.lastResult ?? null);
-      setResultMeta(active.lastResultMeta ?? null);
-
-      setPrefixes((await prefixStore.list()).sort((a, b) => a.prefix.localeCompare(b.prefix)));
-      setEndpoints((await endpointStore.list()).sort((a, b) => a.createdAt - b.createdAt));
-    })();
-  }, [settingsLoaded]);
-
-  const activeEndpoint = endpoints.find((e) => e.id === activeEndpointId);
-
-  // ── Query switching helpers ───────────────────────────────────────────────
-
-  async function flushCurrentQuery() {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    const id = activeQueryIdRef.current;
-    if (!id) return;
-    const q = savedQueriesRef.current.find((x) => x.id === id);
-    if (!q) return;
-    const now = Date.now();
-    const updated = { ...q, queryText: localStorage.getItem(CURRENT_QUERY_KEY) ?? q.queryText, updatedAt: now };
-    setSavedQueries((prev) => prev.map((x) => (x.id === id ? updated : x)));
-    await queryStore.upsert(updated);
-  }
-
-  async function switchQuery(id: string) {
-    await flushCurrentQuery();
-    const target = savedQueriesRef.current.find((q) => q.id === id);
-    if (!target) return;
-    setActiveQueryId(id);
-    localStorage.setItem(ACTIVE_QUERY_KEY, id);
-    setQueryText(target.queryText);
-    localStorage.setItem(CURRENT_QUERY_KEY, target.queryText);
-    setResult(target.lastResult ?? null);
-    setResultMeta(target.lastResultMeta ?? null);
-  }
-
-  async function newQuery() {
-    await flushCurrentQuery();
-    const id = uid();
-    const now = Date.now();
-    const query: SavedQuery = {
-      id,
-      title: "Untitled",
-      queryText: DEFAULT_QUERY,
-      tags: [],
-      createdAt: now,
-      updatedAt: now
-    };
-    await queryStore.upsert(query);
-    setSavedQueries((prev) => [query, ...prev]);
-    setActiveQueryId(id);
-    localStorage.setItem(ACTIVE_QUERY_KEY, id);
-    setQueryText(DEFAULT_QUERY);
-    localStorage.setItem(CURRENT_QUERY_KEY, DEFAULT_QUERY);
-    setResult(null);
-    setResultMeta(null);
-  }
-
-  async function renameQuery(id: string, title: string) {
-    setSavedQueries((prev) => {
-      const updated = prev.map((q) => (q.id === id ? { ...q, title } : q));
-      const q = updated.find((x) => x.id === id);
-      if (q) void queryStore.upsert(q);
-      return updated;
-    });
-  }
-
-  async function colorQuery(id: string, color: string) {
-    setSavedQueries((prev) => {
-      const updated = prev.map((q) => (q.id === id ? { ...q, color } : q));
-      const q = updated.find((x) => x.id === id);
-      if (q) void queryStore.upsert(q);
-      return updated;
-    });
-  }
-
-  async function deleteQuery(id: string) {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    await queryStore.remove(id);
-    const isActive = id === activeQueryIdRef.current;
-    const remaining = savedQueriesRef.current.filter((q) => q.id !== id);
-    setSavedQueries(remaining);
-
-    if (isActive) {
-      if (remaining.length > 0) {
-        const next = remaining[0];
-        setActiveQueryId(next.id);
-        localStorage.setItem(ACTIVE_QUERY_KEY, next.id);
-        setQueryText(next.queryText);
-        localStorage.setItem(CURRENT_QUERY_KEY, next.queryText);
-        setResult(next.lastResult ?? null);
-        setResultMeta(next.lastResultMeta ?? null);
-      } else {
-        // No queries left — create a fresh default
-        const now = Date.now();
-        const fresh: SavedQuery = { id: uid(), title: "Untitled", queryText: DEFAULT_QUERY, tags: [], createdAt: now, updatedAt: now };
-        await queryStore.upsert(fresh);
-        setSavedQueries([fresh]);
-        setActiveQueryId(fresh.id);
-        localStorage.setItem(ACTIVE_QUERY_KEY, fresh.id);
-        setQueryText(DEFAULT_QUERY);
-        localStorage.setItem(CURRENT_QUERY_KEY, DEFAULT_QUERY);
-        setResult(null);
-        setResultMeta(null);
-      }
-    }
-  }
-
-  // ── Endpoints ─────────────────────────────────────────────────────────────
-
-  async function selectEndpoint(id: string) {
-    setActiveEndpointId(id);
-    const next = { ...settings, activeEndpointId: id };
-    setSettings(next);
-    await settingsStore.set(next);
-  }
-
-  async function addEndpoint(label: string, url: string) {
-    const entry: EndpointEntry = { id: uid(), label, url, createdAt: Date.now() };
-    await endpointStore.upsert(entry);
-    setEndpoints((prev) => [...prev, entry]);
-    await selectEndpoint(entry.id);
-  }
-
-  async function removeEndpoint(id: string) {
-    await endpointStore.remove(id);
-    setEndpoints((prev) => {
-      const next = prev.filter((e) => e.id !== id);
-      if (id === activeEndpointId && next.length > 0) {
-        void selectEndpoint(next[0].id);
-      }
-      return next;
-    });
-  }
+  useEscapeKey(settingsOpen, () => setSettingsOpen(false));
+  useEscapeKey(localhostModalOpen, () => setLocalhostModalOpen(false));
 
   // ── Query execution ───────────────────────────────────────────────────────
 
   const runQuery = useCallback(async () => {
-    if (!activeEndpoint) return;
+    if (!em.activeEndpoint) return;
     const startedAt = Date.now();
-    const endpointUrl = normalizeEndpointUrl(activeEndpoint.url);
+    const endpointUrl = normalizeEndpointUrl(em.activeEndpoint.url);
 
     if (isLocalhostUrl(endpointUrl) && !bridge.isAvailable()) {
       setLocalhostModalOpen(true);
@@ -362,13 +135,12 @@ function App() {
     setIsRunning(true);
     setStatusMessage("Running query...");
 
-    const queryWithPrefixes = globalPrefixesOn ? applyPrefixes(queryText, prefixes) : queryText;
+    const queryWithPrefixes = pm.applyPrefixesIfEnabled(qm.queryText);
     const response = isLocalhostUrl(endpointUrl)
       ? await bridge.executeQuery({ endpointUrl, timeoutMs: settings.timeoutMs, query: queryWithPrefixes })
       : await directFetch(endpointUrl, queryWithPrefixes, settings.timeoutMs);
 
     const durationMs = Date.now() - startedAt;
-    const id = activeQueryIdRef.current;
 
     if (response.ok) {
       const rowCount = response.data.results.bindings.length;
@@ -376,51 +148,28 @@ function App() {
       setResult(response.data);
       setResultMeta(meta);
       setStatusMessage(`Success: ${rowCount} rows.`);
-
-      // Persist result to active query (skip lastResult for large datasets to avoid bloating IDB)
-      if (id) {
-        const resultToStore = rowCount <= IDB_RESULT_ROW_CAP ? response.data : undefined;
-        setSavedQueries((prev) => {
-          const updated = prev.map((q) =>
-            q.id === id ? { ...q, lastResult: resultToStore, lastResultMeta: meta, updatedAt: Date.now() } : q
-          );
-          const q = updated.find((x) => x.id === id);
-          if (q) void queryStore.upsert(q);
-          return updated;
-        });
-      }
+      qm.persistResult(meta, response.data);
 
       const entry: QueryHistoryEntry = {
         id: uid(),
-        queryText,
+        queryText: qm.queryText,
         endpoint: endpointUrl,
         startedAt,
         durationMs,
         status: "success",
         rowCount,
-        preview: queryText.slice(0, 120)
+        preview: qm.queryText.slice(0, 120)
       };
       await addEntry(entry);
     } else {
       const meta: ResultMeta = { ok: false, durationMs, rowCount: 0, errorCode: response.error.code, errorMessage: response.error.message };
       setResultMeta(meta);
       setStatusMessage(response.error.message);
-
-      // Persist error meta to active query
-      if (id) {
-        setSavedQueries((prev) => {
-          const updated = prev.map((q) =>
-            q.id === id ? { ...q, lastResult: undefined, lastResultMeta: meta, updatedAt: Date.now() } : q
-          );
-          const q = updated.find((x) => x.id === id);
-          if (q) void queryStore.upsert(q);
-          return updated;
-        });
-      }
+      qm.persistResult(meta);
 
       const entry: QueryHistoryEntry = {
         id: uid(),
-        queryText,
+        queryText: qm.queryText,
         endpoint: endpointUrl,
         startedAt,
         durationMs,
@@ -431,46 +180,15 @@ function App() {
       await addEntry(entry);
     }
     setIsRunning(false);
-  }, [activeEndpoint, bridge, settings.timeoutMs, queryText, prefixes, globalPrefixesOn, addEntry]);
+  }, [em.activeEndpoint, bridge, settings.timeoutMs, qm.queryText, qm.persistResult, pm.applyPrefixesIfEnabled, addEntry]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Prefixes ──────────────────────────────────────────────────────────────
-
-  async function savePrefix(prefix: string, iri: string) {
-    const item: PrefixEntry = { prefix, iri, source: "local", updatedAt: Date.now(), enabled: true };
-    await prefixStore.upsert(item);
-    setPrefixes((prev) =>
-      [...prev.filter((e) => e.prefix !== prefix), item].sort((a, b) => a.prefix.localeCompare(b.prefix))
-    );
-  }
-
-  async function addPrefix() {
-    const prefix = prompt("Prefix (e.g. foaf)")?.trim();
-    const iri = prompt("IRI (e.g. http://xmlns.com/foaf/0.1/)")?.trim();
-    if (!prefix || !iri) return;
-    await savePrefix(prefix, iri);
-  }
-
-  async function togglePrefix(prefix: string) {
-    setPrefixes((prev) => {
-      const updated = prev.map((p) =>
-        p.prefix === prefix ? { ...p, enabled: p.enabled === false ? true : false } : p
-      );
-      const item = updated.find((p) => p.prefix === prefix)!;
-      void prefixStore.upsert(item);
-      return updated;
-    });
-  }
-
-  async function removePrefix(prefix: string) {
-    await prefixStore.remove(prefix);
-    setPrefixes((prev) => prev.filter((p) => p.prefix !== prefix));
-  }
+  // ── Bridge verification ───────────────────────────────────────────────────
 
   async function verifyBridge(extensionId: string): Promise<boolean> {
-    if (!activeEndpoint || !extensionId) return false;
+    if (!em.activeEndpoint || !extensionId) return false;
     const testBridge = new BridgeClient(extensionId);
     const response = await testBridge.healthCheck({
-      endpointUrl: normalizeEndpointUrl(activeEndpoint.url),
+      endpointUrl: normalizeEndpointUrl(em.activeEndpoint.url),
       timeoutMs: settings.timeoutMs
     });
     if (response.ok) {
@@ -481,13 +199,18 @@ function App() {
     return response.ok;
   }
 
-  const activePrefixCount = prefixes.filter((p) => p.enabled !== false).length;
+  // ── Restore last result when switching queries ────────────────────────────
+  // Guard: only restore when the query ID actually changes (not when persistResult
+  // updates the active query object, which would clear large in-session results).
+  const restoredForQueryIdRef = useRef<string>("");
+  useEffect(() => {
+    if (!qm.activeQuery || qm.activeQueryId === restoredForQueryIdRef.current) return;
+    restoredForQueryIdRef.current = qm.activeQueryId;
+    setResult(qm.activeQuery.lastResult ?? null);
+    setResultMeta(qm.activeQuery.lastResultMeta ?? null);
+  }, [qm.activeQueryId, qm.activeQuery]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function toggleGlobalPrefixes() {
-    const next = !globalPrefixesOn;
-    setGlobalPrefixesOn(next);
-    localStorage.setItem("sparql-studio:prefixesOn", String(next));
-  }
+  // ── JSX ───────────────────────────────────────────────────────────────────
 
   const editorSection = (
     <div className="h-full flex flex-col overflow-hidden bg-white rounded-tr-lg">
@@ -495,24 +218,29 @@ function App() {
         <button className="btn" disabled={isRunning} onClick={() => void runQuery()}>
           <i className={isRunning ? "ri-loader-4-line" : "ri-play-line"} /> {isRunning ? "Running..." : "Run query"}
         </button>
-        {prefixes.length > 0 && (
+        {pm.prefixes.length > 0 && (
           <button
             className={`text-xs rounded px-1.5 py-0.5 shrink-0 self-center border transition-colors ${
-              globalPrefixesOn
+              pm.globalPrefixesOn
                 ? "text-green-700 bg-green-100 border-green-300 hover:bg-green-200"
                 : "text-gray-500 bg-gray-100 border-gray-300 hover:bg-gray-200"
             }`}
-            onClick={toggleGlobalPrefixes}
-            title={globalPrefixesOn ? "Click to disable all prefixes" : "Click to enable prefixes"}
+            onClick={pm.toggleGlobalPrefixes}
+            title={pm.globalPrefixesOn ? "Click to disable all prefixes" : "Click to enable prefixes"}
           >
             <i className="ri-braces-line" />{" "}
-            {globalPrefixesOn
-              ? `${activePrefixCount} prefix${activePrefixCount !== 1 ? "es" : ""} active`
+            {pm.globalPrefixesOn
+              ? `${pm.activePrefixCount} prefix${pm.activePrefixCount !== 1 ? "es" : ""} active`
               : "Prefixes off"}
           </button>
         )}
       </div>
-      <SparqlEditorSurface key={activeQueryId} value={queryText} onChange={setQueryText} onAddPrefix={(p, iri) => void savePrefix(p, iri)} />
+      <SparqlEditorSurface
+        key={qm.activeQueryId}
+        value={qm.queryText}
+        onChange={qm.setQueryText}
+        onAddPrefix={(p, iri) => void pm.savePrefix(p, iri)}
+      />
     </div>
   );
 
@@ -544,13 +272,13 @@ function App() {
           <i className="ri-node-tree" /> Graphs
         </button>
         <EndpointPicker
-          endpoints={endpoints}
-          activeId={activeEndpointId}
-          onSelect={(id) => void selectEndpoint(id)}
-          onAdd={addEndpoint}
-          onRemove={(id) => void removeEndpoint(id)}
+          endpoints={em.endpoints}
+          activeId={em.activeEndpointId}
+          onSelect={(id) => void em.selectEndpoint(id)}
+          onAdd={em.addEndpoint}
+          onRemove={(id) => void em.removeEndpoint(id)}
         />
-        {activeEndpoint && isLocalhostUrl(activeEndpoint.url) && (
+        {em.activeEndpoint && isLocalhostUrl(em.activeEndpoint.url) && (
           <button
             className="btn-dark text-xs shrink-0"
             onClick={() => setLocalhostModalOpen(true)}
@@ -570,17 +298,17 @@ function App() {
             <Panel defaultSize={25} minSize={15}>
               <LeftPanel
                 history={history}
-                savedQueries={savedQueries}
-                activeQueryId={activeQueryId}
-                prefixes={prefixes}
-                onNewQuery={() => void newQuery()}
-                onActivateQuery={(id) => void switchQuery(id)}
-                onRenameQuery={(id, title) => void renameQuery(id, title)}
-                onColorQuery={(id, color) => void colorQuery(id, color)}
-                onDeleteQuery={(id) => void deleteQuery(id)}
-                onAddPrefix={() => void addPrefix()}
-                onTogglePrefix={(prefix: string) => void togglePrefix(prefix)}
-                onRemovePrefix={(prefix: string) => void removePrefix(prefix)}
+                savedQueries={qm.savedQueries}
+                activeQueryId={qm.activeQueryId}
+                prefixes={pm.prefixes}
+                onNewQuery={() => void qm.newQuery()}
+                onActivateQuery={(id) => void qm.switchQuery(id)}
+                onRenameQuery={(id, title) => void qm.renameQuery(id, title)}
+                onColorQuery={(id, color) => void qm.colorQuery(id, color)}
+                onDeleteQuery={(id) => void qm.deleteQuery(id)}
+                onAddPrefix={() => void pm.addPrefix()}
+                onTogglePrefix={(prefix: string) => void pm.togglePrefix(prefix)}
+                onRemovePrefix={(prefix: string) => void pm.removePrefix(prefix)}
                 onHide={() => setSidebarOpen(false)}
               />
             </Panel>
@@ -598,9 +326,9 @@ function App() {
       </div>
 
       {/* Localhost bridge modal */}
-      {localhostModalOpen && activeEndpoint && (
+      {localhostModalOpen && em.activeEndpoint && (
         <LocalhostBridgeModal
-          endpointUrl={activeEndpoint.url}
+          endpointUrl={em.activeEndpoint.url}
           savedExtensionId={settings.extensionId}
           onClose={() => setLocalhostModalOpen(false)}
           onVerify={verifyBridge}
