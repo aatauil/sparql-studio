@@ -18,11 +18,15 @@ export function isLocalhostUrl(url: string): boolean {
 export async function directFetch(
   endpointUrl: string,
   query: string,
-  timeoutMs: number
+  timeoutMs: number,
+  externalSignal?: AbortSignal
 ): Promise<BridgeResponse<SparqlJsonResult>> {
   const requestId = crypto.randomUUID();
   const normalizedUrl = normalizeEndpointUrl(endpointUrl);
   const controller = new AbortController();
+  if (externalSignal) {
+    externalSignal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(normalizedUrl, {
