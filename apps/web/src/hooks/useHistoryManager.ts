@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { historyStore, type QueryHistoryEntry } from "../storage";
-
-const MAX_HISTORY = 50;
+import { MAX_HISTORY } from "../config";
 
 export function useHistoryManager() {
   const [history, setHistory] = useState<QueryHistoryEntry[]>([]);
@@ -14,15 +13,16 @@ export function useHistoryManager() {
 
   const addEntry = useCallback(async (entry: QueryHistoryEntry) => {
     await historyStore.add(entry);
+    let evictedId: string | null = null;
     setHistory((prev) => {
       const next = [entry, ...prev];
       if (next.length > MAX_HISTORY) {
-        const evicted = next[MAX_HISTORY];
-        historyStore.remove(evicted.id);
+        evictedId = next[MAX_HISTORY].id;
         return next.slice(0, MAX_HISTORY);
       }
       return next;
     });
+    if (evictedId) await historyStore.remove(evictedId);
   }, []);
 
   return { history, addEntry };
