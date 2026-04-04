@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { useActiveEndpoint } from "../hooks/useActiveEndpoint";
 import { useExecuteQuery } from "../hooks/useBridgeQuery";
