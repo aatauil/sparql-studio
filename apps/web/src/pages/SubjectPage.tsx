@@ -152,52 +152,66 @@ export function SubjectPage() {
     });
   }
 
-  function renderSection(
-    label: string,
-    query: ReturnType<typeof useExecuteQuery>
-  ) {
+  function renderSection(direction: "outgoing" | "incoming", query: ReturnType<typeof useExecuteQuery>) {
+    const isOutgoing = direction === "outgoing";
     const graphs = uniqueGraphs(query.result);
     const filtered = query.result ? filterByGraph(query.result, excludedGraphs) : null;
     const shownCount = filtered?.results.bindings.length ?? null;
     const totalCount = query.result?.results.bindings.length ?? null;
     const hiddenCount = totalCount !== null && shownCount !== null ? totalCount - shownCount : 0;
-
     const isCapped = totalCount === SUBJECT_LIMIT;
 
+    const icon = isOutgoing ? "ri-arrow-right-circle-line" : "ri-arrow-left-circle-line";
+    const iconColor = isOutgoing ? "text-blue-500" : "text-violet-500";
+    const dirLabel = isOutgoing ? "Outgoing" : "Incoming";
+    const pattern = isOutgoing ? "<subject> ?p ?o" : "?s ?p <subject>";
+
     return (
-      <section className="rounded-lg border border-gray-200 bg-white shadow-sm flex flex-col min-h-0">
-        <h2 className="text-sm font-semibold px-4 py-3 border-b border-gray-200 bg-gray-50 rounded-t-lg m-0 flex items-center gap-2">
-          <span className="flex-1">{label}</span>
+      <section className="flex-1 min-h-0 rounded-lg border border-gray-200 bg-white shadow-sm flex flex-col">
+        <h2 className="text-sm font-semibold px-4 py-2.5 border-b border-gray-200 bg-gray-50 rounded-t-lg m-0 flex items-center gap-2 shrink-0">
+          <i className={`${icon} ${iconColor} text-base shrink-0`} />
+          <span>{dirLabel}</span>
+          <span className="font-normal text-gray-400 text-[0.7rem] font-mono">{pattern}</span>
+          <span className="flex-1" />
           {hiddenCount > 0 && (
             <span className="text-[0.68rem] font-normal text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
-              {hiddenCount} hidden by graph filter
+              {hiddenCount} hidden
+            </span>
+          )}
+          {shownCount !== null && !query.isRunning && (
+            <span className="text-[0.68rem] font-normal text-gray-400 tabular-nums">
+              {shownCount.toLocaleString()} triple{shownCount !== 1 ? "s" : ""}
             </span>
           )}
         </h2>
         {isCapped && (
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border-b border-amber-200 text-amber-800 text-xs">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border-b border-amber-200 text-amber-800 text-xs shrink-0">
             <i className="ri-alert-line" />
-            Showing first {SUBJECT_LIMIT.toLocaleString()} triples. This subject may have more — use the query editor for full results.
+            Showing first {SUBJECT_LIMIT.toLocaleString()} triples — use the query editor for full results.
           </div>
         )}
         {showGraphs && graphs.length > 0 && (
           <GraphFilterBar graphs={graphs} excluded={excludedGraphs} onToggle={toggleExcludedGraph} />
         )}
         <div className="flex-1 min-h-0 overflow-auto">
-          {query.isRunning && <p className="px-4 py-3 text-gray-500 text-sm">Loading…</p>}
+          {query.isRunning && (
+            <div className="flex items-center gap-2 justify-center py-8 text-gray-400 text-sm">
+              <i className="ri-loader-4-line animate-spin" /> Loading…
+            </div>
+          )}
           {!query.isRunning && query.error && (
             <p className="px-4 py-3 text-red-600 text-sm">{query.error}</p>
           )}
           {!query.isRunning && !query.error && filtered && filtered.results.bindings.length === 0 && (
-            <p className="px-4 py-3 text-gray-500 text-sm">
-              {hiddenCount > 0 ? "All triples are filtered out by graph exclusions." : "No results."}
-            </p>
+            <div className="flex flex-col items-center justify-center gap-2 py-8 text-gray-300">
+              <i className={`${icon} text-3xl`} />
+              <span className="text-sm text-gray-400">
+                {hiddenCount > 0 ? "All triples hidden by graph filter." : `No ${dirLabel.toLowerCase()} triples.`}
+              </span>
+            </div>
           )}
           {!query.isRunning && !query.error && filtered && filtered.results.bindings.length > 0 && (
             <ResultsTable result={filtered} onNavigateToSubject={handleNavigateToSubject} />
-          )}
-          {!query.isRunning && !query.error && !query.result && !uri && (
-            <p className="px-4 py-3 text-gray-500 text-sm">No subject URI provided.</p>
           )}
         </div>
       </section>
@@ -261,19 +275,22 @@ export function SubjectPage() {
 
       {/* Breadcrumbs */}
       {breadcrumbs.length > 0 && (
-        <div className="flex items-center gap-1 px-3 py-1 bg-[#2a2a2a] text-xs text-[#9ca3af] shrink-0 border-b border-[#333] overflow-hidden">
+        <div className="flex items-center gap-1 px-3 py-1.5 bg-[#1e1e1e] text-xs shrink-0 border-b border-[#333] overflow-x-auto">
+          {/* Home pill */}
           <button
-            className="hover:text-white shrink-0"
-            title="Back to query results"
+            className="flex items-center gap-1 px-2 py-0.5 rounded-sm bg-[#2a2a2a] text-[#6b7280] hover:bg-[#3a3a3a] hover:text-[#9ca3af] transition-colors shrink-0"
+            title="Back to origin"
             onClick={() => navigate(origin)}
           >
-            <i className="ri-home-4-line" />
+            <i className="ri-home-4-line text-[10px]" />
           </button>
+
           {breadcrumbs.map((crumb, i) => (
             <span key={crumb + i} className="flex items-center gap-1 min-w-0">
-              <i className="ri-arrow-right-s-line text-[#555] shrink-0" />
+              <i className="ri-arrow-right-s-line text-[#444] shrink-0" />
+              {/* Visited (non-active ancestor) pill */}
               <button
-                className="hover:text-white truncate max-w-[160px]"
+                className="flex items-center px-2 py-0.5 rounded-sm bg-[#252525] text-[#6b7280] hover:bg-[#2f2f2f] hover:text-[#d1d5db] transition-colors truncate max-w-[140px] border border-[#333] hover:border-[#555]"
                 title={crumb}
                 onClick={() => handleBreadcrumbClick(i)}
               >
@@ -281,17 +298,31 @@ export function SubjectPage() {
               </button>
             </span>
           ))}
-          <i className="ri-arrow-right-s-line text-[#555] shrink-0" />
-          <span className="text-white truncate" title={uri}>
+
+          <i className="ri-arrow-right-s-line text-[#444] shrink-0" />
+
+          {/* Active (current) pill */}
+          <span
+            className="flex items-center px-2 py-0.5 rounded-sm bg-[#1d3a5f] text-[#93c5fd] border border-[#2d5a8e] truncate max-w-[200px] font-medium"
+            title={uri}
+          >
             {shortLabel(uri)}
           </span>
         </div>
       )}
 
       {/* Content */}
-      <div className="flex-1 min-h-0 flex flex-col gap-4 p-4 overflow-hidden bg-gray-100">
-        {renderSection(`Outgoing triples  ·  <${uri}> ?p ?o`, outgoing)}
-        {renderSection(`Incoming triples  ·  ?s ?p <${uri}>`, incoming)}
+      <div className="flex-1 min-h-0 flex flex-col gap-3 p-4 overflow-hidden bg-gray-100">
+        {!uri ? (
+          <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
+            No subject URI provided.
+          </div>
+        ) : (
+          <>
+            {renderSection("outgoing", outgoing)}
+            {renderSection("incoming", incoming)}
+          </>
+        )}
       </div>
 
       {/* Status bar */}
