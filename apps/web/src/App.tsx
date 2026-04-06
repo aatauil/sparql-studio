@@ -19,7 +19,7 @@ import { useQueryManager } from "./hooks/useQueryManager";
 import { usePrefixManager } from "./hooks/usePrefixManager";
 import { useEndpointManager } from "./hooks/useEndpointManager";
 import { ResultsPanel } from "./components/ResultsPanel";
-import { LeftPanel } from "./components/HistorySidebar";
+import { LeftPanel } from "./components/sidebar/Sidebar";
 import { EndpointPicker } from "./components/EndpointPicker";
 import { LocalhostBridgeModal } from "./components/LocalhostBridgeModal";
 import { Group as PanelGroup, Panel, Separator } from "react-resizable-panels";
