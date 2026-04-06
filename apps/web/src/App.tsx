@@ -215,7 +215,7 @@ function App() {
   const editorSection = (
     <div className="h-full flex flex-col overflow-hidden bg-white rounded-tr-lg">
       <div className="shrink-0 flex flex-wrap gap-1.5 px-2.5 py-1.5 border-b border-gray-200 bg-gray-50">
-        <button className="btn" disabled={isRunning} onClick={() => void runQuery()}>
+        <button className="btn bg-green-600 text-white hover:bg-green-700" disabled={isRunning} onClick={() => void runQuery()}>
           <i className={isRunning ? "ri-loader-4-line" : "ri-play-line"} /> {isRunning ? "Running..." : "Run query"}
         </button>
         {pm.prefixes.length > 0 && (
@@ -307,7 +307,7 @@ function App() {
       <PanelGroup orientation="horizontal" className="flex-1 min-h-0 rounded-tl-lg">
         {sidebarOpen && (
           <>
-            <Panel defaultSize={25} minSize={15}>
+            <Panel defaultSize={20} minSize={5}>
               <LeftPanel
                 history={history}
                 historyError={historyError}
