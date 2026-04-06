@@ -17,9 +17,11 @@ const QUERY_COLORS = [
 
 interface LeftPanelProps {
   history: QueryHistoryEntry[];
+  historyError: string | null;
   savedQueries: SavedQuery[];
   activeQueryId: string;
   prefixes: PrefixEntry[];
+  prefixesError: string | null;
   onNewQuery: () => void;
   onActivateQuery: (id: string) => void;
   onRenameQuery: (id: string, title: string) => void;
@@ -133,7 +135,10 @@ function HistoryItem({ item }: { item: QueryHistoryEntry }) {
   );
 }
 
-const HistoryList = memo(function HistoryList({ history }: { history: QueryHistoryEntry[] }) {
+const HistoryList = memo(function HistoryList({ history, error }: { history: QueryHistoryEntry[]; error: string | null }) {
+  if (error) {
+    return <p className="px-3 py-4 text-xs text-red-500">{error}</p>;
+  }
   if (history.length === 0) {
     return <p className="px-3 py-4 text-xs text-gray-400">No history yet.</p>;
   }
@@ -380,11 +385,13 @@ const SavedQueriesList = memo(function SavedQueriesList({
 
 function PrefixesList({
   prefixes,
+  error,
   onAdd,
   onToggle,
   onRemove
 }: {
   prefixes: PrefixEntry[];
+  error: string | null;
   onAdd: () => void;
   onToggle: (prefix: string) => void;
   onRemove: (prefix: string) => void;
@@ -392,11 +399,14 @@ function PrefixesList({
   return (
     <div className="pt-2">
       <div className="px-3 pb-2">
-        <button className="btn w-full text-xs" onClick={onAdd}>
+        <button className="btn w-full text-xs" onClick={onAdd} disabled={error !== null}>
           <i className="ri-add-line" /> Add prefix
         </button>
       </div>
-      {prefixes.length === 0 && (
+      {error && (
+        <p className="px-3 py-4 text-xs text-red-500">{error}</p>
+      )}
+      {!error && prefixes.length === 0 && (
         <p className="px-3 py-4 text-xs text-gray-400">No prefixes yet.</p>
       )}
       {prefixes.map((item) => {
@@ -437,9 +447,11 @@ function PrefixesList({
 
 export function LeftPanel({
   history,
+  historyError,
   savedQueries,
   activeQueryId,
   prefixes,
+  prefixesError,
   onNewQuery,
   onActivateQuery,
   onRenameQuery,
@@ -508,10 +520,11 @@ export function LeftPanel({
             onDelete={onDeleteQuery}
           />
         )}
-        {view === "history" && <HistoryList history={history} />}
+        {view === "history" && <HistoryList history={history} error={historyError} />}
         {view === "prefixes" && (
           <PrefixesList
             prefixes={prefixes}
+            error={prefixesError}
             onAdd={onAddPrefix}
             onToggle={onTogglePrefix}
             onRemove={onRemovePrefix}

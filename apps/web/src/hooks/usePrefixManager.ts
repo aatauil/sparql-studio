@@ -18,6 +18,7 @@ export interface PrefixManager {
   prefixes: PrefixEntry[];
   globalPrefixesOn: boolean;
   activePrefixCount: number;
+  error: string | null;
   savePrefix: (prefix: string, iri: string) => Promise<void>;
   addPrefix: () => Promise<void>;
   togglePrefix: (prefix: string) => Promise<void>;
@@ -28,6 +29,7 @@ export interface PrefixManager {
 
 export function usePrefixManager(settingsLoaded: boolean): PrefixManager {
   const [prefixes, setPrefixes] = useState<PrefixEntry[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [globalPrefixesOn, setGlobalPrefixesOn] = useState(
     () => localStorage.getItem(PREFIX_ON_KEY) !== "false"
   );
@@ -35,14 +37,18 @@ export function usePrefixManager(settingsLoaded: boolean): PrefixManager {
   useEffect(() => {
     if (!settingsLoaded) return;
     (async () => {
-      const prefixList = await prefixStore.list();
-      if (prefixList.length === 0) {
-        for (const p of defaultPrefixes) {
-          await prefixStore.upsert(p);
+      try {
+        const prefixList = await prefixStore.list();
+        if (prefixList.length === 0) {
+          for (const p of defaultPrefixes) {
+            await prefixStore.upsert(p);
+          }
+          setPrefixes([...defaultPrefixes].sort((a, b) => a.prefix.localeCompare(b.prefix)));
+        } else {
+          setPrefixes(prefixList.sort((a, b) => a.prefix.localeCompare(b.prefix)));
         }
-        setPrefixes([...defaultPrefixes].sort((a, b) => a.prefix.localeCompare(b.prefix)));
-      } else {
-        setPrefixes(prefixList.sort((a, b) => a.prefix.localeCompare(b.prefix)));
+      } catch {
+        setError("Could not load prefix library.");
       }
     })();
   }, [settingsLoaded]);
@@ -94,6 +100,7 @@ export function usePrefixManager(settingsLoaded: boolean): PrefixManager {
     prefixes,
     globalPrefixesOn,
     activePrefixCount,
+    error,
     savePrefix,
     addPrefix,
     togglePrefix,

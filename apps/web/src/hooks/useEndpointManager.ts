@@ -6,6 +6,7 @@ export interface EndpointManager {
   endpoints: EndpointEntry[];
   activeEndpointId: string;
   activeEndpoint: EndpointEntry | undefined;
+  error: string | null;
   selectEndpoint: (id: string) => Promise<void>;
   addEndpoint: (label: string, url: string) => Promise<void>;
   removeEndpoint: (id: string) => Promise<void>;
@@ -19,13 +20,16 @@ export function useEndpointManager(
 ): EndpointManager {
   const [endpoints, setEndpoints] = useState<EndpointEntry[]>([]);
   const [activeEndpointId, setActiveEndpointId] = useState<string>(initialActiveEndpointId);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!settingsLoaded) return;
     setActiveEndpointId(initialActiveEndpointId);
     endpointStore.list().then((list) =>
       setEndpoints(list.sort((a, b) => a.createdAt - b.createdAt))
-    );
+    ).catch(() => {
+      setError("Could not load saved endpoints.");
+    });
   }, [settingsLoaded, initialActiveEndpointId]);
 
   async function selectEndpoint(id: string) {
@@ -59,6 +63,7 @@ export function useEndpointManager(
     endpoints,
     activeEndpointId,
     activeEndpoint,
+    error,
     selectEndpoint,
     addEndpoint,
     removeEndpoint

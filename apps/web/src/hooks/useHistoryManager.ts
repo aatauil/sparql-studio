@@ -4,10 +4,13 @@ import { MAX_HISTORY } from "../config";
 
 export function useHistoryManager() {
   const [history, setHistory] = useState<QueryHistoryEntry[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     historyStore.list().then((entries) => {
       setHistory(entries.sort((a, b) => b.startedAt - a.startedAt));
+    }).catch(() => {
+      setError("Could not load query history.");
     });
   }, []);
 
@@ -25,5 +28,5 @@ export function useHistoryManager() {
     if (evictedId) await historyStore.remove(evictedId);
   }, []);
 
-  return { history, addEntry };
+  return { history, error, addEntry };
 }

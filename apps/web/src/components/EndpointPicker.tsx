@@ -5,12 +5,13 @@ import { useEscapeKey } from "../hooks/useEscapeKey";
 interface EndpointPickerProps {
   endpoints: EndpointEntry[];
   activeId: string;
+  error: string | null;
   onSelect: (id: string) => void;
   onAdd: (label: string, url: string) => Promise<void>;
   onRemove: (id: string) => void;
 }
 
-export function EndpointPicker({ endpoints, activeId, onSelect, onAdd, onRemove }: EndpointPickerProps) {
+export function EndpointPicker({ endpoints, activeId, error, onSelect, onAdd, onRemove }: EndpointPickerProps) {
   const [open, setOpen] = useState(false);
   const [addLabel, setAddLabel] = useState("");
   const [addUrl, setAddUrl] = useState("");
@@ -56,7 +57,10 @@ export function EndpointPicker({ endpoints, activeId, onSelect, onAdd, onRemove 
           className="absolute top-full left-0 mt-1 w-72 bg-[#2d2d2d] border border-[#555] rounded shadow-lg z-50"
           role="listbox"
         >
-          {endpoints.map((ep) => (
+          {error && (
+            <p className="px-3 py-3 text-xs text-red-400">{error}</p>
+          )}
+          {!error && endpoints.map((ep) => (
             <div
               key={ep.id}
               className={`group flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-[#3c3c3c] ${

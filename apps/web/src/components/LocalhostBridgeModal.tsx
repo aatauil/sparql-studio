@@ -13,8 +13,13 @@ export function LocalhostBridgeModal({ onClose, onVerify, endpointUrl, savedExte
 
   async function handleVerify() {
     setVerifyState("checking");
-    const ok = await onVerify(extensionId);
-    setVerifyState(ok ? "ok" : "fail");
+    try {
+      const ok = await onVerify(extensionId);
+      setVerifyState(ok ? "ok" : "fail");
+    } catch {
+      /* extension messaging threw — show failure, not a frozen UI */
+      setVerifyState("fail");
+    }
   }
 
   return (

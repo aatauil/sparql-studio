@@ -85,8 +85,8 @@ function Modal({
 
 function App() {
   const navigate = useNavigate();
-  const { settings: loadedSettings, isLoaded: settingsLoaded } = useSettings();
-  const { history, addEntry } = useHistoryManager();
+  const { settings: loadedSettings, isLoaded: settingsLoaded, error: settingsError } = useSettings();
+  const { history, error: historyError, addEntry } = useHistoryManager();
   const heap = useHeapMemory();
 
   const [settings, setSettings] = useState(defaultSettings);
@@ -252,6 +252,17 @@ function App() {
     />
   );
 
+  if (settingsError) {
+    return (
+      <main className="h-screen flex items-center justify-center bg-zinc-900 text-center p-4">
+        <div>
+          <p className="text-white font-semibold mb-2">Storage unavailable</p>
+          <p className="text-gray-400 text-sm">{settingsError}</p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="h-screen overflow-hidden flex flex-col bg-zinc-900 px-2">
       {/* Top toolbar */}
@@ -274,6 +285,7 @@ function App() {
         <EndpointPicker
           endpoints={em.endpoints}
           activeId={em.activeEndpointId}
+          error={em.error}
           onSelect={(id) => void em.selectEndpoint(id)}
           onAdd={em.addEndpoint}
           onRemove={(id) => void em.removeEndpoint(id)}
@@ -298,9 +310,11 @@ function App() {
             <Panel defaultSize={25} minSize={15}>
               <LeftPanel
                 history={history}
+                historyError={historyError}
                 savedQueries={qm.savedQueries}
                 activeQueryId={qm.activeQueryId}
                 prefixes={pm.prefixes}
+                prefixesError={pm.error}
                 onNewQuery={() => void qm.newQuery()}
                 onActivateQuery={(id) => void qm.switchQuery(id)}
                 onRenameQuery={(id, title) => void qm.renameQuery(id, title)}

@@ -15,22 +15,29 @@ export const defaultSettings: AppSettings = {
   timeoutMs: 15000
 };
 
-export function useSettings(): { settings: AppSettings; isLoaded: boolean } {
+export function useSettings(): { settings: AppSettings; isLoaded: boolean; error: string | null } {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const existing = await settingsStore.get();
-      if (existing) {
-        setSettings(existing);
-      } else {
-        await endpointStore.upsert(DEFAULT_ENDPOINT);
-        await settingsStore.set(defaultSettings);
+      try {
+        const existing = await settingsStore.get();
+        if (existing) {
+          setSettings(existing);
+        } else {
+          await endpointStore.upsert(DEFAULT_ENDPOINT);
+          await settingsStore.set(defaultSettings);
+        }
+        setIsLoaded(true);
+      } catch {
+        /* settingsStore/endpointStore use IndexedDB — may be unavailable in
+           private browsing or when storage quota is exceeded */
+        setError("Browser storage is unavailable. Try disabling private browsing or clearing site data.");
       }
-      setIsLoaded(true);
     })();
   }, []);
 
-  return { settings, isLoaded };
+  return { settings, isLoaded, error };
 }
