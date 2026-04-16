@@ -99,6 +99,16 @@ function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Ready.");
 
+  const runAbortRef = useRef<AbortController | null>(null);
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      runAbortRef.current?.abort();
+    };
+  }, []);
+
   // Sync settings once loaded
   useEffect(() => {
     if (!settingsLoaded) return;
@@ -122,8 +132,20 @@ function App() {
 
   // ── Query execution ───────────────────────────────────────────────────────
 
+  const cancelQuery = useCallback(() => {
+    runAbortRef.current?.abort();
+    setIsRunning(false);
+    setStatusMessage("Ready.");
+  }, []);
+
   const runQuery = useCallback(async () => {
     if (!em.activeEndpoint) return;
+
+    // Cancel any in-flight request and create a fresh controller for this run
+    runAbortRef.current?.abort();
+    const controller = new AbortController();
+    runAbortRef.current = controller;
+
     const startedAt = Date.now();
     const endpointUrl = normalizeEndpointUrl(em.activeEndpoint.url);
 
@@ -138,7 +160,10 @@ function App() {
     const queryWithPrefixes = pm.applyPrefixesIfEnabled(qm.queryText);
     const response = isLocalhostUrl(endpointUrl)
       ? await bridge.executeQuery({ endpointUrl, timeoutMs: settings.timeoutMs, query: queryWithPrefixes })
-      : await directFetch(endpointUrl, queryWithPrefixes, settings.timeoutMs);
+      : await directFetch(endpointUrl, queryWithPrefixes, settings.timeoutMs, controller.signal);
+
+    // Bail out if this run was superseded by a newer one or the component unmounted
+    if (controller.signal.aborted || !isMountedRef.current) return;
 
     const durationMs = Date.now() - startedAt;
 
@@ -215,9 +240,15 @@ function App() {
   const editorSection = (
     <div className="h-full flex flex-col overflow-hidden bg-white rounded-tr-lg">
       <div className="shrink-0 flex flex-wrap gap-1.5 px-2.5 py-1.5 border-b border-gray-200 bg-gray-50">
-        <button className="btn bg-green-600 text-white hover:bg-green-700" disabled={isRunning} onClick={() => void runQuery()}>
-          <i className={isRunning ? "ri-loader-4-line" : "ri-play-line"} /> {isRunning ? "Running..." : "Run query"}
-        </button>
+        {isRunning ? (
+          <button className="btn bg-red-600 text-white hover:bg-red-700" onClick={cancelQuery}>
+            <i className="ri-stop-line" /> Cancel
+          </button>
+        ) : (
+          <button className="btn bg-green-600 text-white hover:bg-green-700" onClick={() => void runQuery()}>
+            <i className="ri-play-line" /> Run query
+          </button>
+        )}
         {pm.prefixes.length > 0 && (
           <button
             className={`text-xs rounded px-1.5 py-0.5 shrink-0 self-center border transition-colors ${
