@@ -73,7 +73,8 @@ function SavedQueryItem({
   onActivate,
   onRename,
   onColor,
-  onDelete
+  onDelete,
+  onDuplicate
 }: {
   item: SavedQuery;
   isActive: boolean;
@@ -81,6 +82,7 @@ function SavedQueryItem({
   onRename: (title: string) => void;
   onColor: (color: string) => void;
   onDelete: () => void;
+  onDuplicate: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(item.title);
@@ -155,6 +157,13 @@ function SavedQueryItem({
                 <i className="ri-pencil-line text-[0.65rem]" />
               </button>
               <button
+                className="btn-ghost-sm text-gray-400 hover:text-gray-700"
+                onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+                title="Duplicate query"
+              >
+                <i className="ri-file-copy-line text-[0.65rem]" />
+              </button>
+              <button
                 className="btn-ghost-sm text-red-400 hover:text-red-600"
                 onClick={(e) => { e.stopPropagation(); onDelete(); }}
                 title="Delete query"
@@ -195,7 +204,8 @@ export const QueriesPanel = memo(function QueriesPanel({
   onActivate,
   onRename,
   onColor,
-  onDelete
+  onDelete,
+  onDuplicate
 }: {
   queries: SavedQuery[];
   activeQueryId: string;
@@ -204,6 +214,7 @@ export const QueriesPanel = memo(function QueriesPanel({
   onRename: (id: string, title: string) => void;
   onColor: (id: string, color: string) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
 }) {
   return (
     <div className="pt-2">
@@ -224,6 +235,7 @@ export const QueriesPanel = memo(function QueriesPanel({
             onRename={(title) => onRename(item.id, title)}
             onColor={(color) => onColor(item.id, color)}
             onDelete={() => onDelete(item.id)}
+            onDuplicate={() => onDuplicate(item.id)}
           />
         ))
       )}

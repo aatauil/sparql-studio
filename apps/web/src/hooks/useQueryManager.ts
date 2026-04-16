@@ -21,6 +21,7 @@ export interface QueryManager {
   renameQuery: (id: string, title: string) => Promise<void>;
   colorQuery: (id: string, color: string) => Promise<void>;
   deleteQuery: (id: string) => Promise<void>;
+  duplicateQuery: (id: string) => Promise<void>;
   persistResult: (meta: ResultMeta, result?: SparqlJsonResult) => void;
 }
 
@@ -180,6 +181,23 @@ export function useQueryManager(settingsLoaded: boolean): QueryManager {
     }
   }
 
+  async function duplicateQuery(id: string) {
+    await flushCurrentQuery();
+    const source = savedQueriesRef.current.find((q) => q.id === id);
+    if (!source) return;
+    const now = Date.now();
+    const copy: SavedQuery = {
+      ...source,
+      id: uid(),
+      title: `${source.title} copy`,
+      createdAt: now,
+      updatedAt: now
+    };
+    await queryStore.upsert(copy);
+    setSavedQueries((prev) => [...prev, copy]);
+    await switchQuery(copy.id);
+  }
+
   // ── Result persistence ───────────────────────────────────────────────────────
 
   const persistResult = useCallback((meta: ResultMeta, result?: SparqlJsonResult) => {
@@ -211,6 +229,7 @@ export function useQueryManager(settingsLoaded: boolean): QueryManager {
     renameQuery,
     colorQuery,
     deleteQuery,
+    duplicateQuery,
     persistResult
   };
 }

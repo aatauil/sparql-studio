@@ -326,6 +326,7 @@ function App() {
                 onRenameQuery={(id, title) => void qm.renameQuery(id, title)}
                 onColorQuery={(id, color) => void qm.colorQuery(id, color)}
                 onDeleteQuery={(id) => void qm.deleteQuery(id)}
+                onDuplicateQuery={(id) => void qm.duplicateQuery(id)}
                 onAddPrefix={() => void pm.addPrefix()}
                 onTogglePrefix={(prefix: string) => void pm.togglePrefix(prefix)}
                 onRemovePrefix={(prefix: string) => void pm.removePrefix(prefix)}

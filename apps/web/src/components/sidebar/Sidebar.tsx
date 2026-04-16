@@ -18,6 +18,7 @@ interface LeftPanelProps {
   onRenameQuery: (id: string, title: string) => void;
   onColorQuery: (id: string, color: string) => void;
   onDeleteQuery: (id: string) => void;
+  onDuplicateQuery: (id: string) => void;
   onAddPrefix: () => void;
   onTogglePrefix: (prefix: string) => void;
   onRemovePrefix: (prefix: string) => void;
@@ -36,6 +37,7 @@ export function LeftPanel({
   onRenameQuery,
   onColorQuery,
   onDeleteQuery,
+  onDuplicateQuery,
   onAddPrefix,
   onTogglePrefix,
   onRemovePrefix,
@@ -97,6 +99,7 @@ export function LeftPanel({
             onRename={onRenameQuery}
             onColor={onColorQuery}
             onDelete={onDeleteQuery}
+          onDuplicate={onDuplicateQuery}
           />
         )}
         {view === "history" && (
