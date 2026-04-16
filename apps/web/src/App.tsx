@@ -8,7 +8,7 @@ import {
 } from "./storage";
 import { createSparqlEditor } from "sparql-editor";
 import { prefixCompletion } from "./extensions/prefixCompletion";
-import type { SparqlJsonResult } from "@sparql-studio/contracts";
+import type { HttpResponseInfo, SparqlJsonResult } from "@sparql-studio/contracts";
 import { directFetch, isLocalhostUrl, normalizeEndpointUrl } from "./sparql-fetch";
 import { SplitLayout } from "./SplitLayout";
 import { useSettings, defaultSettings } from "./hooks/useSettings";
@@ -96,6 +96,7 @@ function App() {
   const [localhostModalOpen, setLocalhostModalOpen] = useState(false);
   const [result, setResult] = useState<SparqlJsonResult | null>(null);
   const [resultMeta, setResultMeta] = useState<ResultMeta | null>(null);
+  const [rawHttpResponse, setRawHttpResponse] = useState<HttpResponseInfo | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Ready.");
 
@@ -135,6 +136,7 @@ function App() {
 
     setIsRunning(true);
     setStatusMessage("Running query...");
+    setRawHttpResponse(null);
 
     const queryWithPrefixes = pm.applyPrefixesIfEnabled(qm.queryText);
     const response = isLocalhostUrl(endpointUrl)
@@ -142,6 +144,7 @@ function App() {
       : await directFetch(endpointUrl, queryWithPrefixes, settings.timeoutMs);
 
     const durationMs = Date.now() - startedAt;
+    setRawHttpResponse(response.httpResponse ?? null);
 
     if (response.ok) {
       const rowCount = response.data.results.bindings.length;
@@ -249,6 +252,7 @@ function App() {
     <ResultsPanel
       result={result}
       meta={resultMeta}
+      rawHttpResponse={rawHttpResponse}
       onNavigateToSubject={(uri) => navigate("/subject?uri=" + encodeURIComponent(uri), { state: { breadcrumbs: [] } })}
     />
   );

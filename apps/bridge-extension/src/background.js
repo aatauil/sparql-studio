@@ -36,21 +36,49 @@ async function executeQuery(endpointUrl, query, timeoutMs) {
       signal
     });
 
+    const rawBody = await response.text().catch(() => "");
+    const headers = {};
+    response.headers.forEach((value, key) => { headers[key] = value; });
+    const httpResponse = {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+      body: rawBody.length > 51200 ? rawBody.slice(0, 51200) + "\n…[truncated]" : rawBody
+    };
+
     if (!response.ok) {
-      return { error: { code: "ENDPOINT_UNREACHABLE", message: `Virtuoso responded with ${response.status}.` } };
+      const contentType = headers["content-type"] ?? "";
+      let detail = "";
+      if (contentType.includes("application/json")) {
+        try {
+          const parsed = JSON.parse(rawBody);
+          detail = parsed?.message ?? parsed?.error?.message ?? parsed?.error ?? "";
+          if (typeof detail !== "string") detail = JSON.stringify(detail);
+        } catch {
+          // fall through to text stripping
+        }
+      }
+      const message = detail || `HTTP ${response.status} ${response.statusText}`;
+      return { error: { code: "INVALID_RESPONSE", message }, httpResponse };
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = JSON.parse(rawBody);
+    } catch {
+      return { error: { code: "INVALID_RESPONSE", message: "Endpoint returned non-JSON response." }, httpResponse };
+    }
     if (!data?.head?.vars || !data?.results?.bindings) {
-      return { error: { code: "INVALID_RESPONSE", message: "Endpoint returned non SPARQL JSON format." } };
+      return { error: { code: "INVALID_RESPONSE", message: "Endpoint returned non SPARQL JSON format." }, httpResponse };
     }
 
-    return { data };
+    return { data, httpResponse };
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       return { error: { code: "TIMEOUT", message: "Query request timed out." } };
     }
-    return { error: { code: "ENDPOINT_UNREACHABLE", message: "Could not reach the local endpoint." } };
+    const detail = error instanceof Error ? error.message : String(error);
+    return { error: { code: "ENDPOINT_UNREACHABLE", message: `Could not reach endpoint: ${detail}` } };
   } finally {
     cleanup();
   }
@@ -82,9 +110,9 @@ chrome.runtime.onMessageExternal.addListener((message, _sender, sendResponse) =>
     const timeoutMs = Number(message?.payload?.timeoutMs ?? 15000);
     executeQuery(endpointUrl, query, timeoutMs).then((result) => {
       if (result.error) {
-        sendResponse(createError(requestId, result.error.code, result.error.message));
+        sendResponse({ ok: false, requestId, error: result.error, httpResponse: result.httpResponse });
       } else {
-        sendResponse({ ok: true, requestId, data: result.data });
+        sendResponse({ ok: true, requestId, data: result.data, httpResponse: result.httpResponse });
       }
     });
     return true;

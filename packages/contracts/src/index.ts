@@ -22,10 +22,18 @@ export interface BridgeRequest<T = unknown> {
   payload: T;
 }
 
+export interface HttpResponseInfo {
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
 export interface BridgeSuccess<T = unknown> {
   ok: true;
   requestId: string;
   data: T;
+  httpResponse?: HttpResponseInfo;
 }
 
 export interface BridgeFailure {
@@ -40,6 +48,7 @@ export interface BridgeFailure {
       | "UNKNOWN";
     message: string;
   };
+  httpResponse?: HttpResponseInfo;
 }
 
 export type BridgeResponse<T = unknown> = BridgeSuccess<T> | BridgeFailure;

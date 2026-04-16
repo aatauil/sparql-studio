@@ -1,4 +1,4 @@
-import type { BridgeResponse, SparqlJsonResult } from "@sparql-studio/contracts";
+import type { BridgeResponse, HttpResponseInfo, SparqlJsonResult } from "@sparql-studio/contracts";
 
 export function normalizeEndpointUrl(url: string): string {
   if (!url) return url;
@@ -38,35 +38,58 @@ export async function directFetch(
       body: new URLSearchParams({ query }).toString(),
       signal: controller.signal
     });
+    const rawBody = await res.text().catch(() => "");
+    const headers: Record<string, string> = {};
+    res.headers.forEach((value, key) => { headers[key] = value; });
+    const httpResponse: HttpResponseInfo = {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
+      body: rawBody.length > 51200 ? rawBody.slice(0, 51200) + "\n…[truncated]" : rawBody
+    };
+
     if (!res.ok) {
+      const contentType = headers["content-type"] ?? "";
       let detail = "";
-      try {
-        const body = await res.text();
-        // Virtuoso and many SPARQL endpoints return HTML error pages — extract just the text
-        const stripped = body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-        detail = stripped.length > 300 ? stripped.slice(0, 300) + "…" : stripped;
-      } catch {
-        // ignore body read failures
+      if (contentType.includes("application/json")) {
+        try {
+          const parsed = JSON.parse(rawBody);
+          detail = parsed?.message ?? parsed?.error?.message ?? parsed?.error ?? "";
+          if (typeof detail !== "string") detail = JSON.stringify(detail);
+        } catch {
+          // fall through to text stripping
+        }
       }
-      const message = detail
-        ? `HTTP ${res.status}: ${detail}`
-        : `Endpoint responded with HTTP ${res.status}.`;
+      const message = detail || `HTTP ${res.status} ${res.statusText}`;
       return {
         ok: false,
         requestId,
-        error: { code: "INVALID_RESPONSE", message }
+        error: { code: "INVALID_RESPONSE", message },
+        httpResponse
       };
     }
-    const data: SparqlJsonResult = await res.json();
-    return { ok: true, requestId, data };
+
+    let data: SparqlJsonResult;
+    try {
+      data = JSON.parse(rawBody);
+    } catch {
+      return {
+        ok: false,
+        requestId,
+        error: { code: "INVALID_RESPONSE", message: "Endpoint returned non-JSON response." },
+        httpResponse
+      };
+    }
+    return { ok: true, requestId, data, httpResponse };
   } catch (err) {
     const isAbort = err instanceof Error && err.name === "AbortError";
+    const detail = err instanceof Error ? err.message : String(err);
     return {
       ok: false,
       requestId,
       error: {
         code: isAbort ? "TIMEOUT" : "ENDPOINT_UNREACHABLE",
-        message: isAbort ? "Query timed out." : "Could not reach endpoint."
+        message: isAbort ? "Query timed out." : `Could not reach endpoint: ${detail}`
       }
     };
   } finally {
