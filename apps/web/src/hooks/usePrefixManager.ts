@@ -1,6 +1,54 @@
-import { useEffect, useState } from "react";
+import { createContext, useEffect, useMemo, useState } from "react";
 import { prefixStore, type PrefixEntry } from "../storage";
 import { PREFIX_ON_KEY } from "../config";
+import { getPrefixRegistry } from "../lib/prefixRegistry";
+
+export type DisplayPrefix = { iri: string; prefix: string };
+export const DisplayPrefixContext = createContext<DisplayPrefix[]>([]);
+
+export function useDisplayPrefixes(
+  localPrefixes: PrefixEntry[],
+  globalOn: boolean
+): DisplayPrefix[] {
+  const [registryList, setRegistryList] = useState<DisplayPrefix[]>([]);
+
+  useEffect(() => {
+    getPrefixRegistry()
+      .then((reg) => {
+        setRegistryList(
+          Object.entries(reg).map(([prefix, iri]) => ({ iri: String(iri), prefix }))
+        );
+      })
+      .catch(() => {});
+  }, []);
+
+  return useMemo(() => {
+    if (!globalOn) return [];
+    const map = new Map<string, string>();
+    for (const { iri, prefix } of registryList) map.set(iri, prefix);
+    for (const p of localPrefixes) {
+      if (p.enabled !== false) map.set(p.iri, p.prefix);
+    }
+    return [...map.entries()]
+      .map(([iri, prefix]) => ({ iri, prefix }))
+      .sort((a, b) => b.iri.length - a.iri.length);
+  }, [registryList, localPrefixes, globalOn]);
+}
+
+// Standalone version for route pages that live outside App's context provider.
+// Loads local prefixes from storage and global toggle from localStorage once on mount.
+export function usePageDisplayPrefixes(): DisplayPrefix[] {
+  const [localPrefixes, setLocalPrefixes] = useState<PrefixEntry[]>([]);
+  const [globalOn] = useState(() => localStorage.getItem(PREFIX_ON_KEY) !== "false");
+
+  useEffect(() => {
+    prefixStore.list().then((list) => {
+      setLocalPrefixes(list.length > 0 ? list : [...defaultPrefixes]);
+    }).catch(() => {});
+  }, []);
+
+  return useDisplayPrefixes(localPrefixes, globalOn);
+}
 
 const defaultPrefixes: PrefixEntry[] = [
   { prefix: "rdf", iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#", source: "local", updatedAt: Date.now(), enabled: true },

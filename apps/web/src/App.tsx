@@ -16,7 +16,7 @@ import { useHistoryManager } from "./hooks/useHistoryManager";
 import { useHeapMemory } from "./hooks/useHeapMemory";
 import { useEscapeKey } from "./hooks/useEscapeKey";
 import { useQueryManager } from "./hooks/useQueryManager";
-import { usePrefixManager } from "./hooks/usePrefixManager";
+import { usePrefixManager, useDisplayPrefixes, DisplayPrefixContext } from "./hooks/usePrefixManager";
 import { useEndpointManager } from "./hooks/useEndpointManager";
 import { ResultsPanel } from "./components/ResultsPanel";
 import { LeftPanel } from "./components/sidebar/Sidebar";
@@ -108,6 +108,7 @@ function App() {
 
   const qm = useQueryManager(settingsLoaded);
   const pm = usePrefixManager(settingsLoaded);
+  const displayPrefixes = useDisplayPrefixes(pm.prefixes, pm.globalPrefixesOn);
   const em = useEndpointManager(
     settingsLoaded,
     loadedSettings.activeEndpointId,
@@ -264,6 +265,7 @@ function App() {
   }
 
   return (
+    <DisplayPrefixContext.Provider value={displayPrefixes}>
     <main className="h-screen overflow-hidden flex flex-col bg-zinc-900 px-2">
       {/* Top toolbar */}
       <div className="flex items-center gap-2 px-3 py-1.5 text-sm shrink-0">
@@ -380,6 +382,7 @@ function App() {
         </Modal>
       )}
     </main>
+    </DisplayPrefixContext.Provider>
   );
 }
 

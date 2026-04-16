@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useActiveEndpoint } from "../hooks/useActiveEndpoint";
 import { useExecuteQuery } from "../hooks/useBridgeQuery";
 import { useHeapMemory } from "../hooks/useHeapMemory";
 import { GRAPH_LIST_LIMIT, TYPES_LIMIT } from "../config";
+import { DisplayPrefixContext, usePageDisplayPrefixes } from "../hooks/usePrefixManager";
+import { compressUri } from "../query-utils";
 
 function shortLabel(uri: string): string {
   const afterHash = uri.split("#").pop() ?? "";
@@ -132,6 +134,7 @@ function GraphDetailView({
   typesQuery: ReturnType<typeof useExecuteQuery>;
   onNavigateToSubject: (uri: string) => void;
 }) {
+  const displayPrefixes = useContext(DisplayPrefixContext);
   const statsRow = statsQuery.result?.results.bindings[0] ?? null;
   const triples = statsRow ? formatCount(parseInt(getBindingValue(statsRow, "triples"), 10)) : null;
   const subjects = statsRow ? formatCount(parseInt(getBindingValue(statsRow, "subjects"), 10)) : null;
@@ -201,7 +204,7 @@ function GraphDetailView({
                     >
                       <td className="px-4 py-2.5 max-w-0 w-full">
                         <span className="block truncate font-mono text-xs text-gray-700" title={type}>
-                          {shortLabel(type)}
+                          {compressUri(type, displayPrefixes) ?? shortLabel(type)}
                         </span>
                         <span className="block truncate text-[0.65rem] text-gray-400 mt-0.5" title={type}>
                           {type}
@@ -230,6 +233,7 @@ function GraphDetailView({
 export function GraphExplorerPage() {
   const navigate = useNavigate();
   const [graphUri, setGraphUri] = useState<string | null>(null);
+  const displayPrefixes = usePageDisplayPrefixes();
 
   const { settings, isLoaded, endpointUrl } = useActiveEndpoint();
 
@@ -260,7 +264,7 @@ export function GraphExplorerPage() {
   }
 
   function handleNavigateToSubject(uri: string) {
-    navigate("/subject?uri=" + encodeURIComponent(uri), { state: { breadcrumbs: [], origin: "/graphs" } });
+    navigate("/subject?uri=" + encodeURIComponent(uri), { state: { breadcrumbs: [], origin: "/graphs", pinnedGraph: graphUri } });
   }
 
   // Status bar message
@@ -289,6 +293,7 @@ export function GraphExplorerPage() {
   const statusMessage = statusParts.join(" | ");
 
   return (
+    <DisplayPrefixContext.Provider value={displayPrefixes}>
     <main className="h-screen overflow-hidden flex flex-col">
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-3 py-1.5 bg-[#1e1e1e] text-sm border-b border-[#333] shrink-0">
@@ -329,5 +334,6 @@ export function GraphExplorerPage() {
         {statusMessage}
       </div>
     </main>
+    </DisplayPrefixContext.Provider>
   );
 }

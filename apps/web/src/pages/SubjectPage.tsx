@@ -6,6 +6,7 @@ import { ResultsTable } from "../components/ResultsTable";
 import { useHeapMemory } from "../hooks/useHeapMemory";
 import type { SparqlJsonResult } from "@sparql-studio/contracts";
 import { SUBJECT_LIMIT, EXCLUDED_GRAPHS_KEY } from "../config";
+import { usePageDisplayPrefixes, DisplayPrefixContext } from "../hooks/usePrefixManager";
 
 function loadExcludedGraphs(): Set<string> {
   try {
@@ -45,7 +46,8 @@ function graphLabel(uri: string): string {
   return uri.length > 60 ? uri.slice(0, 58) + "…" : uri;
 }
 
-function shortLabel(uri: string): string {
+function shortLabel(uri: unknown): string {
+  if (typeof uri !== "string") return String(uri ?? "");
   const afterHash = uri.split("#").pop() ?? "";
   const afterSlash = uri.split("/").pop() ?? "";
   const local = afterHash.length > 1 ? afterHash : afterSlash;
@@ -116,31 +118,41 @@ export function SubjectPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const uri = searchParams.get("uri") ?? "";
-  const breadcrumbs: string[] = (location.state as { breadcrumbs?: string[]; origin?: string } | null)?.breadcrumbs ?? [];
-  const origin: string = (location.state as { breadcrumbs?: string[]; origin?: string } | null)?.origin ?? "/";
+  type NavState = { breadcrumbs?: string[]; origin?: string; pinnedGraph?: string } | null;
+  const breadcrumbs: string[] = (location.state as NavState)?.breadcrumbs ?? [];
+  const origin: string = (location.state as NavState)?.origin ?? "/";
+  const pinnedGraph: string | null = (location.state as NavState)?.pinnedGraph ?? null;
 
   const { settings, isLoaded, endpointUrl } = useActiveEndpoint();
+  const displayPrefixes = usePageDisplayPrefixes();
   const [showGraphs, setShowGraphs] = useState(false);
   const [excludedGraphs, setExcludedGraphs] = useState<Set<string>>(loadExcludedGraphs);
+  const [collapsedOutgoing, setCollapsedOutgoing] = useState(false);
+  const [collapsedIncoming, setCollapsedIncoming] = useState(false);
 
   const outgoing = useExecuteQuery(endpointUrl, settings.timeoutMs, settings.extensionId);
   const incoming = useExecuteQuery(endpointUrl, settings.timeoutMs, settings.extensionId);
 
   useEffect(() => {
     if (!isLoaded || !uri || !endpointUrl) return;
-    if (showGraphs) {
+    if (pinnedGraph) {
       void Promise.all([
-        outgoing.run(`SELECT DISTINCT ?p ?o ?g WHERE { GRAPH ?g { <${uri}> ?p ?o } } LIMIT 2000`),
-        incoming.run(`SELECT DISTINCT ?s ?p ?g WHERE { GRAPH ?g { ?s ?p <${uri}> } } LIMIT 2000`)
+        outgoing.run(`SELECT DISTINCT ?p ?o WHERE { GRAPH <${pinnedGraph}> { <${uri}> ?p ?o } } LIMIT ${SUBJECT_LIMIT}`),
+        incoming.run(`SELECT DISTINCT ?s ?p WHERE { GRAPH <${pinnedGraph}> { ?s ?p <${uri}> } } LIMIT ${SUBJECT_LIMIT}`)
+      ]);
+    } else if (showGraphs) {
+      void Promise.all([
+        outgoing.run(`SELECT DISTINCT ?p ?o ?g WHERE { GRAPH ?g { <${uri}> ?p ?o } } LIMIT ${SUBJECT_LIMIT}`),
+        incoming.run(`SELECT DISTINCT ?s ?p ?g WHERE { GRAPH ?g { ?s ?p <${uri}> } } LIMIT ${SUBJECT_LIMIT}`)
       ]);
     } else {
       void Promise.all([
-        outgoing.run(`SELECT DISTINCT ?p ?o WHERE { <${uri}> ?p ?o } LIMIT 2000`),
-        incoming.run(`SELECT DISTINCT ?s ?p WHERE { ?s ?p <${uri}> } LIMIT 2000`)
+        outgoing.run(`SELECT DISTINCT ?p ?o WHERE { <${uri}> ?p ?o } LIMIT ${SUBJECT_LIMIT}`),
+        incoming.run(`SELECT DISTINCT ?s ?p WHERE { ?s ?p <${uri}> } LIMIT ${SUBJECT_LIMIT}`)
       ]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, uri, endpointUrl, showGraphs]);
+  }, [isLoaded, uri, endpointUrl, showGraphs, pinnedGraph]);
 
   function toggleExcludedGraph(graph: string) {
     setExcludedGraphs((prev) => {
@@ -152,7 +164,12 @@ export function SubjectPage() {
     });
   }
 
-  function renderSection(direction: "outgoing" | "incoming", query: ReturnType<typeof useExecuteQuery>) {
+  function renderSection(
+    direction: "outgoing" | "incoming",
+    query: ReturnType<typeof useExecuteQuery>,
+    collapsed: boolean,
+    onToggleCollapse: () => void
+  ) {
     const isOutgoing = direction === "outgoing";
     const graphs = uniqueGraphs(query.result);
     const filtered = query.result ? filterByGraph(query.result, excludedGraphs) : null;
@@ -167,66 +184,75 @@ export function SubjectPage() {
     const pattern = isOutgoing ? "<subject> ?p ?o" : "?s ?p <subject>";
 
     return (
-      <section className="flex-1 min-h-0 rounded-lg border border-gray-200 bg-white shadow-sm flex flex-col">
+      <section className={`${collapsed ? "shrink-0" : "flex-1 min-h-0"} rounded-lg border border-gray-200 bg-white shadow-sm flex flex-col`}>
         <h2 className="text-sm font-semibold px-4 py-2.5 border-b border-gray-200 bg-gray-50 rounded-t-lg m-0 flex items-center gap-2 shrink-0">
           <i className={`${icon} ${iconColor} text-base shrink-0`} />
           <span>{dirLabel}</span>
-          <span className="font-normal text-gray-400 text-[0.7rem] font-mono">{pattern}</span>
+          {!collapsed && <span className="font-normal text-gray-400 text-[0.7rem] font-mono">{pattern}</span>}
           <span className="flex-1" />
-          {hiddenCount > 0 && (
+          {!collapsed && hiddenCount > 0 && (
             <span className="text-[0.68rem] font-normal text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
               {hiddenCount} hidden
             </span>
           )}
-          {shownCount !== null && !query.isRunning && (
+          {!collapsed && shownCount !== null && !query.isRunning && (
             <span className="text-[0.68rem] font-normal text-gray-400 tabular-nums">
               {shownCount.toLocaleString()} triple{shownCount !== 1 ? "s" : ""}
             </span>
           )}
+          <button
+            className="ml-1 text-gray-400 hover:text-gray-600 transition-colors"
+            title={collapsed ? `Expand ${dirLabel}` : `Collapse ${dirLabel}`}
+            onClick={onToggleCollapse}
+          >
+            <i className={`${collapsed ? "ri-expand-vertical-line" : "ri-collapse-vertical-line"} text-sm`} />
+          </button>
         </h2>
-        {isCapped && (
+        {!collapsed && isCapped && (
           <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border-b border-amber-200 text-amber-800 text-xs shrink-0">
             <i className="ri-alert-line" />
             Showing first {SUBJECT_LIMIT.toLocaleString()} triples — use the query editor for full results.
           </div>
         )}
-        {showGraphs && graphs.length > 0 && (
+        {!collapsed && showGraphs && graphs.length > 0 && (
           <GraphFilterBar graphs={graphs} excluded={excludedGraphs} onToggle={toggleExcludedGraph} />
         )}
-        <div className="flex-1 min-h-0 overflow-auto">
-          {query.isRunning && (
-            <div className="flex items-center gap-2 justify-center py-8 text-gray-400 text-sm">
-              <i className="ri-loader-4-line animate-spin" /> Loading…
-            </div>
-          )}
-          {!query.isRunning && query.error && (
-            <p className="px-4 py-3 text-red-600 text-sm">{query.error}</p>
-          )}
-          {!query.isRunning && !query.error && filtered && filtered.results.bindings.length === 0 && (
-            <div className="flex flex-col items-center justify-center gap-2 py-8 text-gray-300">
-              <i className={`${icon} text-3xl`} />
-              <span className="text-sm text-gray-400">
-                {hiddenCount > 0 ? "All triples hidden by graph filter." : `No ${dirLabel.toLowerCase()} triples.`}
-              </span>
-            </div>
-          )}
-          {!query.isRunning && !query.error && filtered && filtered.results.bindings.length > 0 && (
-            <ResultsTable result={filtered} onNavigateToSubject={handleNavigateToSubject} />
-          )}
-        </div>
+        {!collapsed && (
+          <div className="flex-1 min-h-0 overflow-auto">
+            {query.isRunning && (
+              <div className="flex items-center gap-2 justify-center py-8 text-gray-400 text-sm">
+                <i className="ri-loader-4-line animate-spin" /> Loading…
+              </div>
+            )}
+            {!query.isRunning && query.error && (
+              <p className="px-4 py-3 text-red-600 text-sm">{query.error}</p>
+            )}
+            {!query.isRunning && !query.error && filtered && filtered.results.bindings.length === 0 && (
+              <div className="flex flex-col items-center justify-center gap-2 py-8 text-gray-300">
+                <i className={`${icon} text-3xl`} />
+                <span className="text-sm text-gray-400">
+                  {hiddenCount > 0 ? "All triples hidden by graph filter." : `No ${dirLabel.toLowerCase()} triples.`}
+                </span>
+              </div>
+            )}
+            {!query.isRunning && !query.error && filtered && filtered.results.bindings.length > 0 && (
+              <ResultsTable result={filtered} onNavigateToSubject={handleNavigateToSubject} />
+            )}
+          </div>
+        )}
       </section>
     );
   }
 
   function handleNavigateToSubject(targetUri: string) {
     navigate("/subject?uri=" + encodeURIComponent(targetUri), {
-      state: { breadcrumbs: [...breadcrumbs, uri], origin }
+      state: { breadcrumbs: [...breadcrumbs, uri], origin, pinnedGraph }
     });
   }
 
   function handleBreadcrumbClick(index: number) {
     navigate("/subject?uri=" + encodeURIComponent(breadcrumbs[index]), {
-      state: { breadcrumbs: breadcrumbs.slice(0, index), origin }
+      state: { breadcrumbs: breadcrumbs.slice(0, index), origin, pinnedGraph }
     });
   }
 
@@ -240,6 +266,7 @@ export function SubjectPage() {
   const statusMessage = statusParts.length > 0 ? statusParts.join(" | ") : (outgoing.isRunning || incoming.isRunning ? "Loading…" : "Ready.");
 
   return (
+    <DisplayPrefixContext.Provider value={displayPrefixes}>
     <main className="h-screen overflow-hidden flex flex-col">
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-3 py-1.5 bg-[#1e1e1e] text-sm border-b border-[#333] shrink-0">
@@ -248,7 +275,7 @@ export function SubjectPage() {
           onClick={() => {
             if (breadcrumbs.length > 0) {
               navigate("/subject?uri=" + encodeURIComponent(breadcrumbs[breadcrumbs.length - 1]), {
-                state: { breadcrumbs: breadcrumbs.slice(0, -1), origin }
+                state: { breadcrumbs: breadcrumbs.slice(0, -1), origin, pinnedGraph }
               });
             } else {
               navigate(origin);
@@ -259,18 +286,29 @@ export function SubjectPage() {
           <i className="ri-arrow-left-line" /> Back
         </button>
         <span className="font-semibold text-white">Subject</span>
+        {pinnedGraph && (
+          <span
+            className="flex items-center gap-1 text-[#6b7280] text-xs shrink-0 border border-[#444] rounded px-2 py-0.5 bg-[#2a2a2a]"
+            title={pinnedGraph}
+          >
+            <i className="ri-stack-line text-[10px]" />
+            {pinnedGraph.length > 50 ? pinnedGraph.slice(0, 48) + "…" : pinnedGraph}
+          </span>
+        )}
         <span className="text-[#9ca3af] text-xs overflow-hidden text-ellipsis whitespace-nowrap flex-1 min-w-0">
           {uri || "—"}
         </span>
-        <button
-          className={`btn-dark text-xs shrink-0 ${showGraphs ? "ring-1 ring-blue-400 text-blue-300" : ""}`}
-          onClick={() => setShowGraphs((v) => !v)}
-          title={showGraphs
-            ? "Graph mode on — queries include ?g column. Note: triples in the default graph are not shown in this mode."
-            : "Show which named graph each triple belongs to (re-runs queries)"}
-        >
-          <i className="ri-node-tree" /> {showGraphs ? "Graphs on" : "Show graphs"}
-        </button>
+        {!pinnedGraph && (
+          <button
+            className={`btn-dark text-xs shrink-0 ${showGraphs ? "ring-1 ring-blue-400 text-blue-300" : ""}`}
+            onClick={() => setShowGraphs((v) => !v)}
+            title={showGraphs
+              ? "Graph mode on — queries include ?g column. Note: triples in the default graph are not shown in this mode."
+              : "Show which named graph each triple belongs to (re-runs queries)"}
+          >
+            <i className="ri-node-tree" /> {showGraphs ? "Graphs on" : "Show graphs"}
+          </button>
+        )}
       </div>
 
       {/* Breadcrumbs */}
@@ -319,8 +357,8 @@ export function SubjectPage() {
           </div>
         ) : (
           <>
-            {renderSection("outgoing", outgoing)}
-            {renderSection("incoming", incoming)}
+            {renderSection("outgoing", outgoing, collapsedOutgoing, () => setCollapsedOutgoing((v) => !v))}
+            {renderSection("incoming", incoming, collapsedIncoming, () => setCollapsedIncoming((v) => !v))}
           </>
         )}
       </div>
@@ -333,5 +371,6 @@ export function SubjectPage() {
         {statusMessage}
       </div>
     </main>
+    </DisplayPrefixContext.Provider>
   );
 }

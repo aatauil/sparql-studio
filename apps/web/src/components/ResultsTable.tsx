@@ -13,6 +13,7 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
   const [sortBy, setSortBy] = useState<string>("");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const displayPrefixes = useContext(DisplayPrefixContext);
 
   const columns = result.head.vars;
 
@@ -81,9 +82,15 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
                   const binding = row[column];
                   const value = binding?.value ?? "";
                   if (isUri(binding)) {
+                    const compressed = compressUri(value, displayPrefixes);
+                    const cellKey = `${vRow.index}:${column}`;
+                    const isCopied = copiedKey === cellKey;
                     return (
                       <td key={column} className="relative group border border-gray-300 px-2 py-[3px] align-top">
-                        {value}
+                        <span>{compressed ?? value}</span>
+                        {compressed && (
+                          <div className="text-[0.65rem] text-gray-400 font-mono leading-tight mt-0.5 break-all">{value}</div>
+                        )}
                         <div className="absolute top-0 right-0 hidden group-hover:flex gap-0.5 p-0.5">
                           <button
                             className="btn-ghost-sm"
