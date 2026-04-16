@@ -1,8 +1,9 @@
-import { useRef, useMemo, useState } from "react";
+import { useRef, useMemo, useState, useContext } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { SparqlJsonResult } from "@sparql-studio/contracts";
-import { isUri } from "../query-utils";
+import { isUri, compressUri } from "../query-utils";
 import { ESTIMATED_ROW_HEIGHT } from "../config";
+import { DisplayPrefixContext } from "../hooks/usePrefixManager";
 
 interface ResultsTableProps {
   result: SparqlJsonResult;
@@ -14,6 +15,16 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const scrollRef = useRef<HTMLDivElement>(null);
   const displayPrefixes = useContext(DisplayPrefixContext);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function triggerCopy(key: string, text: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      setCopiedKey(key);
+      copyTimerRef.current = setTimeout(() => setCopiedKey(null), 1500);
+    });
+  }
 
   const columns = result.head.vars;
 
@@ -95,9 +106,9 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
                           <button
                             className="btn-ghost-sm"
                             title="Copy to clipboard"
-                            onClick={() => void navigator.clipboard.writeText("<" + value + ">")}
+                            onClick={() => triggerCopy(cellKey, "<" + value + ">")}
                           >
-                            <i className="ri-file-copy-line" />
+                            {isCopied ? "Copied!" : <i className="ri-file-copy-line" />}
                           </button>
                           <button
                             className="btn-ghost-sm"
@@ -117,6 +128,8 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
                       </td>
                     );
                   }
+                  const cellKey = `${vRow.index}:${column}`;
+                  const isCopied = copiedKey === cellKey;
                   return (
                     <td key={column} className="relative group border border-gray-300 px-2 py-[3px] align-top">
                       {value}
@@ -125,9 +138,9 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
                           <button
                             className="btn-ghost-sm"
                             title="Copy to clipboard"
-                            onClick={() => void navigator.clipboard.writeText(value)}
+                            onClick={() => triggerCopy(cellKey, value)}
                           >
-                            <i className="ri-file-copy-line" />
+                            {isCopied ? "Copied!" : <i className="ri-file-copy-line" />}
                           </button>
                         </div>
                       )}
@@ -135,15 +148,20 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
                   );
                 })}
                 <td className="border border-gray-300 px-2 py-[3px] align-top">
-                  <button
-                    className="btn-ghost-sm"
-                    onClick={() => {
-                      const values = columns.map((col) => row[col]?.value ?? "");
-                      void navigator.clipboard.writeText(values.join("\t"));
-                    }}
-                  >
-                    Copy row
-                  </button>
+                  {(() => {
+                    const rowKey = `row:${vRow.index}`;
+                    return (
+                      <button
+                        className="btn-ghost-sm"
+                        onClick={() => {
+                          const values = columns.map((col) => row[col]?.value ?? "");
+                          triggerCopy(rowKey, values.join("\t"));
+                        }}
+                      >
+                        {copiedKey === rowKey ? "Copied!" : "Copy row"}
+                      </button>
+                    );
+                  })()}
                 </td>
               </tr>
             );
