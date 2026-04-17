@@ -28,23 +28,10 @@ import type { BridgeResponse, SparqlJsonResult } from "@sparql-studio/contracts"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function shortLabel(uri: string): string {
-  const afterHash = uri.split("#").pop() ?? "";
-  const afterSlash = uri.split("/").pop() ?? "";
-  const local = afterHash.length > 1 ? afterHash : afterSlash;
-  return local.length > 0 && local.length < 60 ? local : uri.slice(0, 50) + "…";
-}
-
 function formatCount(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
   if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
   return String(n);
-}
-
-function getBindingValue(binding: Record<string, unknown>, key: string): string {
-  const val = binding[key];
-  if (val && typeof val === "object" && "value" in val) return String((val as { value: unknown }).value);
-  return "";
 }
 
 // ── Graph List View ──────────────────────────────────────────────────────────

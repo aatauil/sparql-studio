@@ -7,6 +7,7 @@ import { useHeapMemory } from "../hooks/useHeapMemory";
 import type { SparqlJsonResult } from "@sparql-studio/contracts";
 import { SUBJECT_LIMIT, EXCLUDED_GRAPHS_KEY } from "../config";
 import { usePageDisplayPrefixes, DisplayPrefixContext } from "../hooks/usePrefixManager";
+import { shortLabel } from "../query-utils";
 
 function loadExcludedGraphs(): Set<string> {
   try {
@@ -46,13 +47,6 @@ function graphLabel(uri: string): string {
   return uri.length > 60 ? uri.slice(0, 58) + "…" : uri;
 }
 
-function shortLabel(uri: unknown): string {
-  if (typeof uri !== "string") return String(uri ?? "");
-  const afterHash = uri.split("#").pop() ?? "";
-  const afterSlash = uri.split("/").pop() ?? "";
-  const local = afterHash.length > 1 ? afterHash : afterSlash;
-  return local.length > 0 && local.length < 50 ? local : uri.slice(0, 40) + "…";
-}
 
 const CHIP_SHOW_LIMIT = 5;
 

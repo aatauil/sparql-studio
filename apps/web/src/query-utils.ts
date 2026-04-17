@@ -1,5 +1,19 @@
 import type { SparqlBinding, SparqlJsonResult } from "@sparql-studio/contracts";
 
+export function shortLabel(uri: unknown): string {
+  if (typeof uri !== "string") return String(uri ?? "");
+  const afterHash = uri.split("#").pop() ?? "";
+  const afterSlash = uri.split("/").pop() ?? "";
+  const local = afterHash.length > 1 ? afterHash : afterSlash;
+  return local.length > 0 && local.length < 60 ? local : uri.slice(0, 50) + "…";
+}
+
+export function getBindingValue(binding: Record<string, unknown>, key: string): string {
+  const val = binding[key];
+  if (val && typeof val === "object" && "value" in val) return String((val as { value: unknown }).value);
+  return "";
+}
+
 export function isUri(binding?: SparqlBinding): boolean {
   return binding?.type === "uri" || /^https?:\/\//.test(binding?.value ?? "");
 }
