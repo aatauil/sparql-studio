@@ -217,7 +217,7 @@ function App() {
   // ── JSX ───────────────────────────────────────────────────────────────────
 
   const editorSection = (
-    <div className="h-full flex flex-col overflow-hidden bg-white rounded-tr-lg">
+    <div className="h-full flex flex-col overflow-hidden bg-white">
       <div className="shrink-0 flex flex-wrap gap-1.5 px-2.5 py-1.5 border-b border-gray-200 bg-gray-50">
         <button className="btn bg-green-600 text-white hover:bg-green-700" disabled={isRunning} onClick={() => void runQuery()}>
           <i className={isRunning ? "ri-loader-4-line" : "ri-play-line"} /> {isRunning ? "Running..." : "Run query"}
@@ -270,7 +270,7 @@ function App() {
 
   return (
     <DisplayPrefixContext.Provider value={displayPrefixes}>
-    <main className="h-screen overflow-hidden flex flex-col bg-zinc-900 px-2">
+    <main className="h-screen overflow-hidden flex flex-col bg-zinc-900">
       {/* Top toolbar */}
       <div className="flex items-center gap-2 px-3 py-1.5 text-sm shrink-0">
         <button
@@ -310,7 +310,7 @@ function App() {
       </div>
 
       {/* Main content: history sidebar | editor+results */}
-      <PanelGroup orientation="horizontal" className="flex-1 min-h-0 rounded-tl-lg">
+      <PanelGroup orientation="horizontal" className="flex-1 min-h-0">
         {sidebarOpen && (
           <>
             <Panel defaultSize={20} minSize={5}>
