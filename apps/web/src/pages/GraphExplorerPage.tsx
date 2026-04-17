@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   ReactFlow,
@@ -21,7 +21,7 @@ import { useExecuteQuery } from "../hooks/useBridgeQuery";
 import { useHeapMemory } from "../hooks/useHeapMemory";
 import { GRAPH_LIST_LIMIT, TYPES_LIMIT } from "../config";
 import { DisplayPrefixContext, usePageDisplayPrefixes } from "../hooks/usePrefixManager";
-import { compressUri } from "../query-utils";
+import { compressUri, shortLabel, getBindingValue } from "../query-utils";
 import { BridgeClient } from "../bridge";
 import { directFetch, isLocalhostUrl, normalizeEndpointUrl } from "../sparql-fetch";
 import type { BridgeResponse, SparqlJsonResult } from "@sparql-studio/contracts";
@@ -236,9 +236,13 @@ function SchemaExplorerInner({
   const nodeDepthRef = useRef(new Map<string, number>());
   const colMaxYRef   = useRef(new Map<number, number>());
   const mountedRef   = useRef(true);
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+      if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+    };
   }, []);
 
   function placeInColumn(
@@ -333,7 +337,9 @@ function SchemaExplorerInner({
     setNodes((nds) =>
       nds.map((n) => n.id === targetUri ? { ...n, data: { ...n.data, highlighted: true } } : n)
     );
-    setTimeout(() => {
+    if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+    highlightTimeoutRef.current = setTimeout(() => {
+      highlightTimeoutRef.current = null;
       setNodes((nds) =>
         nds.map((n) => n.id === targetUri ? { ...n, data: { ...n.data, highlighted: false } } : n)
       );
@@ -385,15 +391,20 @@ function SchemaExplorerInner({
 
       // Classify each connected type: new real node vs proxy of existing
       const newRealUris: string[] = [];
+      const newRealUrisSet = new Set<string>();
       const proxyEntries: Array<{ proxyId: string; targetUri: string }> = [];
+      const addedProxyIds = new Set<string>();
       for (const row of rows) {
         const other = getBindingValue(row, "otherType");
         if (!other) continue;
         if (existingRealUris.has(other)) {
           const proxyId = `proxy::${typeUri}::${other}`;
-          if (!proxyEntries.some((p) => p.proxyId === proxyId))
+          if (!addedProxyIds.has(proxyId)) {
+            addedProxyIds.add(proxyId);
             proxyEntries.push({ proxyId, targetUri: other });
-        } else if (!newRealUris.includes(other)) {
+          }
+        } else if (!newRealUrisSet.has(other)) {
+          newRealUrisSet.add(other);
           newRealUris.push(other);
         }
       }
@@ -698,12 +709,15 @@ export function GraphExplorerPage() {
   }
 
   // Instance counts pre-loaded by typesQuery — passed into the schema explorer
-  const instanceMap = new Map<string, number>();
-  for (const row of typesQuery.result?.results.bindings ?? []) {
-    const type = getBindingValue(row, "type");
-    const count = parseInt(getBindingValue(row, "instances"), 10);
-    if (type && !isNaN(count)) instanceMap.set(type, count);
-  }
+  const instanceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of typesQuery.result?.results.bindings ?? []) {
+      const type = getBindingValue(row, "type");
+      const count = parseInt(getBindingValue(row, "instances"), 10);
+      if (type && !isNaN(count)) map.set(type, count);
+    }
+    return map;
+  }, [typesQuery.result]);
 
   // Status bar
   const statusParts: string[] = [];
