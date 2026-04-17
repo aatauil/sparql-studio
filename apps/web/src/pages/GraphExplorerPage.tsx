@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   ReactFlow,
@@ -130,10 +130,10 @@ function StatChip({ label, value, icon }: { label: string; value: string | null;
 
 // ── Schema Explorer ───────────────────────────────────────────────────────────
 
-const NODE_W = 190;
-const NODE_H = 72;
+const NODE_W = 220;
+const NODE_H = 36;                 // approx auto-height of a single-line node card
 const COL_X_STEP = NODE_W + 80;   // horizontal distance between columns
-const ROW_Y_STEP = NODE_H + 24;   // vertical distance between nodes in a column
+const ROW_Y_STEP = NODE_H + 48;   // vertical distance between nodes in a column
 const TYPE_EXPANSION_LIMIT = 80;
 
 type ExplorerNodeData = {
@@ -146,25 +146,31 @@ type ExplorerNodeData = {
   highlighted: boolean;
   isProxy: boolean;
   proxyTargetUri?: string;
+  predicates?: string[];
 };
+
+const ExplorerActionsContext = createContext<{
+  collapse: (uri: string) => void;
+  hide: (uri: string) => void;
+} | null>(null);
 
 function ExplorerNode({ data }: NodeProps) {
   const d = data as ExplorerNodeData;
+  const actions = useContext(ExplorerActionsContext);
 
   if (d.isProxy) {
     return (
       <div
-        title={`Reference to: ${d.uri}`}
-        style={{ width: NODE_W, minHeight: NODE_H }}
-        className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2 shadow-sm select-none cursor-alias"
+        title={`Click to focus: ${d.uri}`}
+        style={{ width: NODE_W }}
+        className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2 shadow-none select-none cursor-pointer opacity-60 hover:opacity-80 transition-opacity"
       >
-        <Handle type="target" position={Position.Left} style={{ background: "#d1d5db", width: 8, height: 8 }} />
-        <div className="flex items-center gap-1">
-          <i className="ri-focus-3-line text-gray-400 text-xs shrink-0" />
-          <span className="font-medium text-gray-500 text-xs truncate">{d.label}</span>
+        <Handle type="target" position={Position.Left} style={{ background: "#9ca3af", width: 8, height: 8 }} />
+        <div className="flex items-center gap-1.5">
+          <i className="ri-crosshair-line text-gray-400 text-xs shrink-0" />
+          <span className="font-medium text-gray-500 text-xs break-all flex-1">{d.label}</span>
         </div>
-        <div className="text-[0.6rem] text-gray-400 mt-0.5">Click to focus original</div>
-        <Handle type="source" position={Position.Right} style={{ background: "#d1d5db", width: 8, height: 8 }} />
+        <Handle type="source" position={Position.Right} style={{ background: "#9ca3af", width: 8, height: 8 }} />
       </div>
     );
   }
@@ -172,8 +178,8 @@ function ExplorerNode({ data }: NodeProps) {
   return (
     <div
       title={d.uri}
-      style={{ width: NODE_W, minHeight: NODE_H }}
-      className={`rounded-lg border px-3 py-2 shadow-sm select-none transition-colors ${
+      style={{ width: NODE_W }}
+      className={`group/node rounded-lg border px-3 py-2 shadow-sm select-none transition-colors relative ${
         d.isStart
           ? "border-blue-500 bg-blue-50"
           : d.expanded
@@ -184,14 +190,34 @@ function ExplorerNode({ data }: NodeProps) {
       }`}
     >
       <Handle type="target" position={Position.Left} style={{ background: "#93c5fd", width: 8, height: 8 }} />
-      <div className="font-semibold text-gray-800 text-xs truncate">{d.label}</div>
-      {d.instances && (
-        <div className="text-[0.65rem] text-gray-400 mt-0.5 tabular-nums">{d.instances} instances</div>
-      )}
+      <div className="font-semibold text-gray-800 text-xs break-all pr-5">{d.label}</div>
       {d.loading && <div className="text-[0.65rem] text-blue-400 mt-0.5">Loading…</div>}
-      {!d.expanded && !d.loading && !d.isStart && (
-        <div className="text-[0.6rem] text-gray-300 mt-0.5">Click to expand</div>
+      {d.predicates && d.predicates.length > 0 && (
+        <div className="mt-1.5 flex flex-col gap-0.5">
+          {d.predicates.map((p) => (
+            <span key={p} className="text-[0.6rem] text-gray-400 truncate" title={p}>{p}</span>
+          ))}
+        </div>
       )}
+      {/* Node action buttons — visible on hover */}
+      <div className="absolute top-1 right-1 flex items-center gap-0.5 opacity-0 group-hover/node:opacity-100 transition-opacity">
+        {d.expanded && !d.isStart && (
+          <button
+            title="Collapse"
+            className="p-0.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors"
+            onClick={(e) => { e.stopPropagation(); actions?.collapse(d.uri); }}
+          >
+            <i className="ri-subtract-line text-[0.65rem]" />
+          </button>
+        )}
+        <button
+          title="Hide node"
+          className="p-0.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors"
+          onClick={(e) => { e.stopPropagation(); actions?.hide(d.uri); }}
+        >
+          <i className="ri-eye-off-line text-[0.65rem]" />
+        </button>
+      </div>
       <Handle type="source" position={Position.Right} style={{ background: "#93c5fd", width: 8, height: 8 }} />
     </div>
   );
@@ -233,10 +259,15 @@ function SchemaExplorerInner({
 
   const expandedRef  = useRef(new Set<string>());
   // column layout state — depth per node, and the lowest bottom-edge per column
-  const nodeDepthRef = useRef(new Map<string, number>());
-  const colMaxYRef   = useRef(new Map<number, number>());
-  const mountedRef   = useRef(true);
+  const nodeDepthRef  = useRef(new Map<string, number>());
+  const nodeParentRef = useRef(new Map<string, string>()); // child id → parent uri
+  const colMaxYRef    = useRef(new Map<number, number>());
+  const mountedRef    = useRef(true);
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [hiddenUris, setHiddenUris] = useState(new Set<string>());
+  const hiddenUrisRef = useRef(hiddenUris);
+  hiddenUrisRef.current = hiddenUris;
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -288,7 +319,7 @@ function SchemaExplorerInner({
         : directFetch(url, query, timeoutMs);
   }, [endpointUrl, timeoutMs, extensionId]);
 
-  function makeNode(uri: string, isStart: boolean): Node {
+  function makeNode(uri: string, isStart: boolean, predicates: string[] = []): Node {
     const instances = instanceMap.get(uri);
     return {
       id: uri,
@@ -303,11 +334,12 @@ function SchemaExplorerInner({
         isStart,
         highlighted: false,
         isProxy: false,
+        predicates,
       } satisfies ExplorerNodeData,
     };
   }
 
-  function makeProxyNode(proxyId: string, targetUri: string): Node {
+  function makeProxyNode(proxyId: string, targetUri: string, predicates: string[] = []): Node {
     return {
       id: proxyId,
       type: "explorerNode",
@@ -322,6 +354,7 @@ function SchemaExplorerInner({
         highlighted: false,
         isProxy: true,
         proxyTargetUri: targetUri,
+        predicates,
       } satisfies ExplorerNodeData,
     };
   }
@@ -344,6 +377,41 @@ function SchemaExplorerInner({
         nds.map((n) => n.id === targetUri ? { ...n, data: { ...n.data, highlighted: false } } : n)
       );
     }, 1500);
+  }
+
+  function collapseNode(typeUri: string) {
+    // Collect all descendant node ids recursively
+    const toRemove = new Set<string>();
+    function collectDescendants(parentId: string) {
+      for (const [child, parent] of nodeParentRef.current) {
+        if (parent === parentId && !toRemove.has(child)) {
+          toRemove.add(child);
+          expandedRef.current.delete(child);
+          collectDescendants(child);
+        }
+      }
+    }
+    collectDescendants(typeUri);
+    expandedRef.current.delete(typeUri);
+    for (const id of toRemove) nodeParentRef.current.delete(id);
+
+    const remaining = nodesRef.current.filter((n) => !toRemove.has(n.id));
+    setNodes(remaining.map((n) =>
+      n.id === typeUri ? { ...n, data: { ...n.data, expanded: false } } : n
+    ));
+    setEdges(edgesRef.current.filter((e) => !toRemove.has(e.source) && !toRemove.has(e.target)));
+  }
+
+  function hideNode(uri: string) {
+    setHiddenUris((prev) => new Set([...prev, uri]));
+  }
+
+  function unhideNode(uri: string) {
+    setHiddenUris((prev) => { const s = new Set(prev); s.delete(uri); return s; });
+  }
+
+  function unhideAll() {
+    setHiddenUris(new Set());
   }
 
   async function expandType(typeUri: string) {
@@ -419,45 +487,67 @@ function SchemaExplorerInner({
       ];
       const positions = placeInColumn(typeUri, allNewIds);
 
-      const allNodes: Node[] = [
-        // Existing nodes: update data only — positions stay exactly as-is
-        ...nodesRef.current.map((n) =>
-          n.id === typeUri ? { ...n, data: { ...n.data, loading: false, expanded: true } } : n
-        ),
-        ...newRealUris.map((uri) => ({ ...makeNode(uri, false), position: positions.get(uri)! })),
-        ...proxyEntries.map((p) => ({ ...makeProxyNode(p.proxyId, p.targetUri), position: positions.get(p.proxyId)! })),
-      ];
+      // Track parent relationships for collapse support
+      for (const id of allNewIds) nodeParentRef.current.set(id, typeUri);
 
-      // Build edges — route to proxy IDs when the real node already exists
+      // Collect predicates per connected node (to render inside the node card)
+      const predicatesByNode = new Map<string, string[]>();
+      for (const row of rows) {
+        const pred = getBindingValue(row, "predicate");
+        const other = getBindingValue(row, "otherType");
+        if (!pred || !other) continue;
+        const resolvedOther = proxyIdByTarget.get(other) ?? other;
+        const predLabel = compressUri(pred, displayPrefixesRef.current) ?? shortLabel(pred);
+        if (!predicatesByNode.has(resolvedOther)) predicatesByNode.set(resolvedOther, []);
+        const list = predicatesByNode.get(resolvedOther)!;
+        if (!list.includes(predLabel)) list.push(predLabel);
+      }
+
+      // Build clean edges — one per (source, target) pair, no labels
       const existingEdgeIds = new Set(edgesRef.current.map((e) => e.id));
       const newEdges: Edge[] = [];
       for (const row of rows) {
         const dir = getBindingValue(row, "direction");
         const pred = getBindingValue(row, "predicate");
         const other = getBindingValue(row, "otherType");
-        const links = getBindingValue(row, "links");
         if (!pred || !other) continue;
-        // Use proxy ID if the other type was already on canvas
         const resolvedOther = proxyIdByTarget.get(other) ?? other;
         const source = dir === "out" ? typeUri : resolvedOther;
         const target = dir === "out" ? resolvedOther : typeUri;
-        const edgeId = `${source}::${pred}::${target}`;
+        const edgeId = `${source}::${target}`;
         if (existingEdgeIds.has(edgeId)) continue;
         existingEdgeIds.add(edgeId);
-        const predLabel = compressUri(pred, displayPrefixesRef.current) ?? shortLabel(pred);
         newEdges.push({
           id: edgeId,
           source,
           target,
-          label: links ? `${predLabel} (${links})` : predLabel,
           type: "smoothstep",
           markerEnd: { type: MarkerType.ArrowClosed, color: "#9ca3af" },
           style: { stroke: "#9ca3af", strokeWidth: 1.5 },
-          labelStyle: { fontSize: 10, fill: "#6b7280" },
-          labelBgStyle: { fill: "white", fillOpacity: 0.85 },
         });
       }
       const allEdges = [...edgesRef.current, ...newEdges];
+
+      const allNodes: Node[] = [
+        // Existing nodes: update data only — positions stay exactly as-is;
+        // accumulate any new predicates if this node gets additional edges
+        ...nodesRef.current.map((n) => {
+          if (n.id === typeUri) return { ...n, data: { ...n.data, loading: false, expanded: true } };
+          const newPreds = predicatesByNode.get(n.id);
+          if (!newPreds) return n;
+          const existing = (n.data as ExplorerNodeData).predicates ?? [];
+          const merged = [...existing, ...newPreds.filter((p) => !existing.includes(p))];
+          return { ...n, data: { ...n.data, predicates: merged } };
+        }),
+        ...newRealUris.map((uri) => ({
+          ...makeNode(uri, false, predicatesByNode.get(uri) ?? []),
+          position: positions.get(uri)!,
+        })),
+        ...proxyEntries.map((p) => ({
+          ...makeProxyNode(p.proxyId, p.targetUri, predicatesByNode.get(p.proxyId) ?? []),
+          position: positions.get(p.proxyId)!,
+        })),
+      ];
 
       setNodes(allNodes);
       setEdges(allEdges);
@@ -472,7 +562,9 @@ function SchemaExplorerInner({
   useEffect(() => {
     expandedRef.current  = new Set();
     nodeDepthRef.current = new Map([[startType, 0]]);
+    nodeParentRef.current = new Map();
     colMaxYRef.current   = new Map([[0, NODE_H]]);
+    setHiddenUris(new Set());
     setNodes([{ ...makeNode(startType, true), position: { x: 0, y: 0 } }]);
     setEdges([]);
     void expandType(startType);
@@ -490,25 +582,69 @@ function SchemaExplorerInner({
     }
   }
 
+  const visibleNodes = nodes.filter((n) => !hiddenUris.has(n.id));
+  const visibleEdges = edges.filter((e) => !hiddenUris.has(e.source) && !hiddenUris.has(e.target));
+
+  // Build list of hidden node labels for the unhide panel
+  const hiddenList = useMemo(() => {
+    return [...hiddenUris].map((uri) => {
+      const node = nodesRef.current.find((n) => n.id === uri);
+      const label = node ? (node.data as ExplorerNodeData).label : (compressUri(uri, displayPrefixesRef.current) ?? shortLabel(uri));
+      return { uri, label };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hiddenUris]);
+
   return (
-    <ReactFlow
-      className="explorer-flow h-full w-full"
-      nodes={nodes}
-      edges={edges}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onNodeClick={onNodeClick}
-      nodeTypes={explorerNodeTypes}
-      fitView
-      fitViewOptions={{ padding: 0.3 }}
-      minZoom={0.05}
-      nodesDraggable
-      nodesConnectable={false}
-      elementsSelectable={false}
-    >
-      <Background color="#e5e7eb" gap={20} />
-      <Controls />
-    </ReactFlow>
+    <ExplorerActionsContext.Provider value={{ collapse: collapseNode, hide: hideNode }}>
+      <div className="relative h-full w-full">
+        <ReactFlow
+          className="explorer-flow h-full w-full"
+          nodes={visibleNodes}
+          edges={visibleEdges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeClick={onNodeClick}
+          nodeTypes={explorerNodeTypes}
+          fitView
+          fitViewOptions={{ padding: 0.3 }}
+          minZoom={0.05}
+          nodesDraggable
+          nodesConnectable={false}
+          elementsSelectable={false}
+        >
+          <Background color="#94a3b8" gap={20} size={1.5} />
+          <Controls />
+        </ReactFlow>
+        {hiddenList.length > 0 && (
+          <div className="absolute top-2 right-2 z-10 bg-white border border-gray-200 rounded-lg shadow-md p-2 min-w-[160px] max-w-[240px]">
+            <div className="flex items-center justify-between mb-1.5 gap-2">
+              <span className="text-xs font-semibold text-gray-600">{hiddenList.length} hidden</span>
+              <button
+                className="text-[0.65rem] text-blue-500 hover:underline shrink-0"
+                onClick={unhideAll}
+              >
+                Unhide all
+              </button>
+            </div>
+            <div className="flex flex-col gap-0.5 max-h-48 overflow-y-auto">
+              {hiddenList.map(({ uri, label }) => (
+                <div key={uri} className="flex items-center gap-1 group">
+                  <span className="text-[0.65rem] text-gray-500 truncate flex-1 min-w-0" title={uri}>{label}</span>
+                  <button
+                    title="Unhide"
+                    className="shrink-0 p-0.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors opacity-0 group-hover:opacity-100"
+                    onClick={() => unhideNode(uri)}
+                  >
+                    <i className="ri-eye-line text-[0.65rem]" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </ExplorerActionsContext.Provider>
   );
 }
 
