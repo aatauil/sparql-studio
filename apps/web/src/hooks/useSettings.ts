@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { endpointStore, settingsStore, type AppSettings, type EndpointEntry } from "../storage";
+import { endpointStore, settingsStore, storageWasReset, type AppSettings, type EndpointEntry } from "../storage";
 
 const DEFAULT_ENDPOINT: EndpointEntry = {
   id: "default-dbpedia",
@@ -15,7 +15,7 @@ export const defaultSettings: AppSettings = {
   timeoutMs: 15000
 };
 
-export function useSettings(): { settings: AppSettings; isLoaded: boolean; error: string | null } {
+export function useSettings(): { settings: AppSettings; isLoaded: boolean; error: string | null; storageReset: boolean } {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,5 +39,5 @@ export function useSettings(): { settings: AppSettings; isLoaded: boolean; error
     })();
   }, []);
 
-  return { settings, isLoaded, error };
+  return { settings, isLoaded, error, storageReset: storageWasReset };
 }

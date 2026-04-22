@@ -98,7 +98,7 @@ function ConnectionBadge({ status }: { status: ConnectionStatus }) {
 
 function App() {
   const navigate = useNavigate();
-  const { settings: loadedSettings, isLoaded: settingsLoaded, error: settingsError } = useSettings();
+  const { settings: loadedSettings, isLoaded: settingsLoaded, error: settingsError, storageReset } = useSettings();
   const { history, error: historyError, addEntry } = useHistoryManager();
   const heap = useHeapMemory();
 
@@ -298,6 +298,11 @@ function App() {
   return (
     <DisplayPrefixContext.Provider value={displayPrefixes}>
     <main className="h-screen overflow-hidden flex flex-col bg-zinc-900">
+      {storageReset && (
+        <div className="bg-amber-900/80 text-amber-200 text-xs px-4 py-1.5 text-center shrink-0">
+          Local storage was corrupted and has been reset. Your saved queries, history, and endpoints could not be recovered.
+        </div>
+      )}
       {/* Top toolbar */}
       <div className="dark flex items-center gap-2 px-3 py-1.5 text-sm shrink-0">
         <Button

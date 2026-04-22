@@ -1,4 +1,5 @@
-import { openDB } from "idb";
+import { openDB, deleteDB } from "idb";
+import type { IDBPDatabase } from "idb";
 import type { SparqlJsonResult } from "@sparql-studio/contracts";
 
 export interface ResultMeta {
@@ -55,15 +56,54 @@ export interface AppSettings {
   timeoutMs: number;
 }
 
-const dbPromise = openDB("sparql-studio", 2, {
-  upgrade(db) {
+// One entry per DB version. Each function only creates/modifies what's new for that version.
+// To add v3: append a new function. DB version is derived from array length automatically.
+const MIGRATIONS: Array<(db: IDBPDatabase) => void> = [
+  // v1 — initial schema
+  (db) => {
     db.createObjectStore("savedQueries", { keyPath: "id" });
     db.createObjectStore("queryHistory", { keyPath: "id" });
     db.createObjectStore("prefixLibrary", { keyPath: "prefix" });
     db.createObjectStore("appSettings", { keyPath: "key" });
+  },
+  // v2 — endpoints store
+  (db) => {
     db.createObjectStore("endpoints", { keyPath: "id" });
+  },
+];
+
+// Set to true after a corrupt-DB recovery so hooks can surface a warning to the user.
+export let storageWasReset = false;
+
+function buildDB() {
+  return openDB("sparql-studio", MIGRATIONS.length, {
+    upgrade(db, oldVersion, newVersion) {
+      for (let v = oldVersion; v < (newVersion ?? MIGRATIONS.length); v++) {
+        MIGRATIONS[v](db);
+      }
+    },
+    blocked() {
+      console.warn("[sparql-studio] DB upgrade blocked — close other tabs and reload.");
+    },
+    blocking() {
+      // This tab is holding back a newer version in another tab; reload to yield.
+      window.location.reload();
+    },
+  });
+}
+
+async function openWithRecovery() {
+  try {
+    return await buildDB();
+  } catch (err) {
+    console.error("[sparql-studio] Failed to open IndexedDB, resetting storage:", err);
+    await deleteDB("sparql-studio");
+    storageWasReset = true;
+    return buildDB();
   }
-});
+}
+
+const dbPromise = openWithRecovery();
 
 export const queryStore = {
   async list(): Promise<SavedQuery[]> {
