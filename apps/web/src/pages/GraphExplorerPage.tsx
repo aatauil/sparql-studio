@@ -120,9 +120,9 @@ function GraphListView({
 
 function StatChip({ label, value, icon }: { label: string; value: string | null; icon: string }) {
   return (
-    <div className="flex flex-col items-center gap-1 px-6 py-4 bg-white border border-gray-200 shadow-sm flex-1 min-w-0">
+    <div className="flex items-center px-6 py-4 bg-white border border-gray-200 shadow-sm flex-1 min-w-0">
       <i className={`${icon} text-xl text-blue-400`} />
-      <span className="text-2xl font-semibold text-gray-800 tabular-nums">
+      <span className="text-2xl mx-2 font-semibold text-gray-800 tabular-nums">
         {value ?? <span className="text-gray-300 text-lg">…</span>}
       </span>
       <span className="text-xs text-gray-400 uppercase tracking-wide">{label}</span>

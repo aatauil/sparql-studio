@@ -24,7 +24,7 @@ import { ResultsPanel } from "./components/ResultsPanel";
 import { LeftPanel } from "./components/sidebar/Sidebar";
 import { EndpointPicker } from "./components/EndpointPicker";
 import { LocalhostBridgeModal } from "./components/LocalhostBridgeModal";
-import { Group as PanelGroup, Panel, Separator } from "react-resizable-panels";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "./components/ui/resizable";
 import { uid } from "./config";
 import { Button } from "./components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "./components/ui/dialog";
@@ -337,10 +337,10 @@ function App() {
       </div>
 
       {/* Main content: history sidebar | editor+results */}
-      <PanelGroup orientation="horizontal" className="flex-1 min-h-0">
+      <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0">
         {sidebarOpen && (
           <>
-            <Panel defaultSize={20} minSize={5}>
+            <ResizablePanel defaultSize={20} minSize={5}>
               <LeftPanel
                 history={history}
                 historyError={historyError}
@@ -359,14 +359,14 @@ function App() {
                 onRemovePrefix={(prefix: string) => void pm.removePrefix(prefix)}
                 onHide={() => setSidebarOpen(false)}
               />
-            </Panel>
-            <Separator className="splitHandleH" />
+            </ResizablePanel>
+            <ResizableHandle withHandle />
           </>
         )}
-        <Panel defaultSize={75} minSize={40}>
+        <ResizablePanel defaultSize={75} minSize={40}>
           <SplitLayout top={editorSection} bottom={resultsSection} initialTopSize={60} minTopSize={25} minBottomSize={15} />
-        </Panel>
-      </PanelGroup>
+        </ResizablePanel>
+      </ResizablePanelGroup>
 
       {/* Status bar */}
       <div className="shrink-0 bg-[#007acc] text-white text-[0.72rem] px-3 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis" role="status">

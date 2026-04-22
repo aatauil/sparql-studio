@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Group as PanelGroup, Panel, Separator } from "react-resizable-panels";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "./components/ui/resizable";
 
 interface SplitLayoutProps {
   top: ReactNode;
@@ -17,15 +17,15 @@ export function SplitLayout({
   minBottomSize = 20
 }: SplitLayoutProps) {
   return (
-    <PanelGroup orientation="vertical" className="splitRoot">
-      <Panel defaultSize={initialTopSize} minSize={minTopSize}>
+    <ResizablePanelGroup orientation="vertical">
+      <ResizablePanel defaultSize={initialTopSize} minSize={minTopSize}>
         {top}
-      </Panel>
-      <Separator className="splitHandle" />
-      <Panel defaultSize={100 - initialTopSize} minSize={minBottomSize}>
+      </ResizablePanel>
+      <ResizableHandle withHandle />
+      <ResizablePanel defaultSize={100 - initialTopSize} minSize={minBottomSize}>
         {bottom}
-      </Panel>
-    </PanelGroup>
+      </ResizablePanel>
+    </ResizablePanelGroup>
   );
 }
 
