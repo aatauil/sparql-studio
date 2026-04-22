@@ -5,6 +5,7 @@ import { isUri, compressUri } from "../query-utils";
 import { ESTIMATED_ROW_HEIGHT } from "../config";
 import { DisplayPrefixContext } from "../hooks/usePrefixManager";
 import { Button } from "./ui/button";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 
 interface ResultsTableProps {
   result: SparqlJsonResult;
@@ -58,14 +59,14 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
 
   return (
     <div ref={scrollRef} className="overflow-auto h-full">
-      <table className="border-collapse w-full min-w-[600px] text-s leading-snug">
-        <thead>
-          <tr>
+      <table className="w-full caption-bottom text-xs min-w-[600px] border-collapse">
+        <TableHeader>
+          <TableRow>
             {columns.map((column) => (
-              <th key={column} className="border border-gray-300 px-2 py-[3px] text-left sticky top-0 bg-white z-10">
+              <TableHead key={column} className="sticky top-0 bg-background z-10 border border-border px-2 py-[3px]">
                 <Button
                   variant="ghost"
-                  className="h-auto p-0 font-semibold"
+                  className="h-auto p-0 font-semibold text-xs"
                   onClick={() => {
                     if (sortBy === column) {
                       setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
@@ -76,21 +77,24 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
                   }}
                   aria-label={`Sort by ${column}`}
                 >
-                  {column} {sortBy === column ? <i className={sortDir === "asc" ? "ri-arrow-up-s-fill" : "ri-arrow-down-s-fill"} /> : ""}
+                  {column}{" "}
+                  {sortBy === column ? <i className={sortDir === "asc" ? "ri-arrow-up-s-fill" : "ri-arrow-down-s-fill"} /> : ""}
                 </Button>
-              </th>
+              </TableHead>
             ))}
-            <th className="border border-gray-300 px-2 py-[3px] text-left sticky top-0 bg-white z-10">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
+            <TableHead className="sticky top-0 bg-background z-10 border border-border px-2 py-[3px]">
+              Actions
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {paddingTop > 0 && (
-            <tr><td style={{ height: paddingTop }} colSpan={columns.length + 1} /></tr>
+            <TableRow><TableCell style={{ height: paddingTop }} colSpan={columns.length + 1} className="p-0" /></TableRow>
           )}
           {virtualRows.map((vRow) => {
             const row = rows[vRow.index]!;
             return (
-              <tr key={vRow.index} data-index={vRow.index} ref={virtualizer.measureElement}>
+              <TableRow key={vRow.index} data-index={vRow.index} ref={virtualizer.measureElement}>
                 {columns.map((column) => {
                   const binding = row[column];
                   const value = binding?.value ?? "";
@@ -99,10 +103,10 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
                     const cellKey = `${vRow.index}:${column}`;
                     const isCopied = copiedKey === cellKey;
                     return (
-                      <td key={column} className="relative group border border-gray-300 px-2 py-[3px] align-top">
+                      <TableCell key={column} className="relative group border border-border px-2 py-[3px] align-top whitespace-normal">
                         <span>{compressed ?? value}</span>
                         {compressed && (
-                          <div className="text-[0.65rem] text-gray-400 font-mono leading-tight mt-0.5 break-all">{value}</div>
+                          <div className="text-[0.65rem] text-muted-foreground font-mono leading-tight mt-0.5 break-all">{value}</div>
                         )}
                         <div className="absolute top-0 right-0 hidden group-hover:flex gap-0.5 p-0.5">
                           <Button
@@ -130,16 +134,16 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
                             <i className="ri-article-line" />
                           </Button>
                         </div>
-                      </td>
+                      </TableCell>
                     );
                   }
                   const cellKey = `${vRow.index}:${column}`;
                   const isCopied = copiedKey === cellKey;
                   return (
-                    <td key={column} className="relative group border border-gray-300 px-2 py-[3px] align-top">
+                    <TableCell key={column} className="relative group border border-border px-2 py-[3px] align-top whitespace-normal">
                       {value}
                       {value && (
-                        <div className="absolute top-0 right-0 hidden group-hover:flex gap-0.5 p-0.5 bg-white/90">
+                        <div className="absolute top-0 right-0 hidden group-hover:flex gap-0.5 p-0.5 bg-background/90">
                           <Button
                             variant="outline"
                             size="xs"
@@ -150,10 +154,10 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
                           </Button>
                         </div>
                       )}
-                    </td>
+                    </TableCell>
                   );
                 })}
-                <td className="border border-gray-300 px-2 py-[3px] align-top">
+                <TableCell className="border border-border px-2 py-[3px] align-top">
                   {(() => {
                     const rowKey = `row:${vRow.index}`;
                     return (
@@ -169,14 +173,14 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
                       </Button>
                     );
                   })()}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             );
           })}
           {paddingBottom > 0 && (
-            <tr><td style={{ height: paddingBottom }} colSpan={columns.length + 1} /></tr>
+            <TableRow><TableCell style={{ height: paddingBottom }} colSpan={columns.length + 1} className="p-0" /></TableRow>
           )}
-        </tbody>
+        </TableBody>
       </table>
     </div>
   );

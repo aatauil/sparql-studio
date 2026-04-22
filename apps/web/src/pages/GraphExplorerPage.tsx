@@ -24,6 +24,7 @@ import { DisplayPrefixContext, usePageDisplayPrefixes } from "../hooks/usePrefix
 import { compressUri, shortLabel, getBindingValue } from "../query-utils";
 import { BridgeClient } from "../bridge";
 import { Button } from "../components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { directFetch, isLocalhostUrl, normalizeEndpointUrl } from "../sparql-fetch";
 import type { BridgeResponse, SparqlJsonResult } from "@sparql-studio/contracts";
 
@@ -49,8 +50,8 @@ function GraphListView({
   const isCapped = count === GRAPH_LIST_LIMIT;
 
   return (
-    <section className="rounded-lg border border-gray-200 bg-white shadow-sm flex flex-col min-h-0 flex-1">
-      <h2 className="text-sm font-semibold px-4 py-3 border-b border-gray-200 bg-gray-50 rounded-t-lg m-0 flex items-center gap-2">
+    <section className="border border-gray-200 bg-white shadow-sm flex flex-col min-h-0 flex-1">
+      <h2 className="text-sm font-semibold px-4 py-3 border-b border-gray-200 bg-gray-50 m-0 flex items-center gap-2">
         <i className="ri-stack-line text-gray-400" />
         <span className="flex-1">
           Named Graphs
@@ -74,38 +75,38 @@ function GraphListView({
           <p className="px-4 py-3 text-gray-500 text-sm">No named graphs found.</p>
         )}
         {!query.isRunning && !query.error && count > 0 && (
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="text-left text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
-                <th className="px-4 py-2 font-medium">Graph</th>
-                <th className="px-4 py-2 font-medium text-right w-32">Triples</th>
-                <th className="px-4 py-2 w-10" />
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow className="text-xs text-muted-foreground uppercase tracking-wide border-b border-border">
+                <TableHead className="px-4 py-2">Graph</TableHead>
+                <TableHead className="px-4 py-2 text-right w-32">Triples</TableHead>
+                <TableHead className="px-4 py-2 w-10" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {rows.map((row, i) => {
                 const g = getBindingValue(row, "g");
                 const triples = parseInt(getBindingValue(row, "triples"), 10);
                 return (
-                  <tr
+                  <TableRow
                     key={g + i}
-                    className="border-b border-gray-50 hover:bg-blue-50 cursor-pointer group transition-colors"
+                    className="border-b border-border hover:bg-blue-50 cursor-pointer group transition-colors"
                     onClick={() => onSelectGraph(g)}
                   >
-                    <td className="px-4 py-2.5 font-mono text-xs text-gray-700 max-w-0 w-full">
+                    <TableCell className="px-4 py-2.5 font-mono text-xs text-gray-700 max-w-0 w-full">
                       <span className="block truncate" title={g}>{g}</span>
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-gray-500 tabular-nums text-xs whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="px-4 py-2.5 text-right text-muted-foreground tabular-nums text-xs whitespace-nowrap">
                       {isNaN(triples) ? "—" : formatCount(triples)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
+                    </TableCell>
+                    <TableCell className="px-4 py-2.5 text-right">
                       <i className="ri-arrow-right-line text-gray-300 group-hover:text-blue-500 transition-colors" />
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
         {!query.isRunning && !query.error && !query.result && (
           <p className="px-4 py-3 text-gray-400 text-sm">Waiting for endpoint…</p>
@@ -119,7 +120,7 @@ function GraphListView({
 
 function StatChip({ label, value, icon }: { label: string; value: string | null; icon: string }) {
   return (
-    <div className="flex flex-col items-center gap-1 px-6 py-4 bg-white rounded-lg border border-gray-200 shadow-sm flex-1 min-w-0">
+    <div className="flex flex-col items-center gap-1 px-6 py-4 bg-white border border-gray-200 shadow-sm flex-1 min-w-0">
       <i className={`${icon} text-xl text-blue-400`} />
       <span className="text-2xl font-semibold text-gray-800 tabular-nums">
         {value ?? <span className="text-gray-300 text-lg">…</span>}
@@ -669,7 +670,7 @@ function SchemaExplorerInner({
           <Controls />
         </ReactFlow>
         {hiddenList.length > 0 && (
-          <div className="absolute top-2 right-2 z-10 bg-white border border-gray-200 rounded-lg shadow-md p-2 min-w-[160px] max-w-[240px]">
+          <div className="absolute top-2 right-2 z-10 bg-white border border-gray-200 shadow-md p-2 min-w-[160px] max-w-[240px]">
             <div className="flex items-center justify-between mb-1.5 gap-2">
               <span className="text-xs font-semibold text-gray-600">{hiddenList.length} hidden</span>
               <Button
@@ -749,8 +750,8 @@ function GraphDetailView({
       </div>
 
       {/* Types table */}
-      <section className="rounded-lg border border-gray-200 bg-white shadow-sm flex flex-col min-h-0 flex-1">
-        <h2 className="text-sm font-semibold px-4 py-3 border-b border-gray-200 bg-gray-50 rounded-t-lg m-0 flex items-center gap-2">
+      <section className="border border-gray-200 bg-white shadow-sm flex flex-col min-h-0 flex-1">
+        <h2 className="text-sm font-semibold px-4 py-3 border-b border-gray-200 bg-gray-50 m-0 flex items-center gap-2">
           <i className="ri-shapes-line text-gray-400" />
           <span className="flex-1">
             Types
@@ -777,24 +778,24 @@ function GraphDetailView({
             </p>
           )}
           {!typesQuery.isRunning && !typesQuery.error && typeCount > 0 && (
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="text-left text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
-                  <th className="px-4 py-2 font-medium">Type</th>
-                  <th className="px-4 py-2 font-medium text-right w-36">Instances</th>
-                  <th className="px-4 py-2 w-20" />
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow className="text-xs text-muted-foreground uppercase tracking-wide border-b border-border">
+                  <TableHead className="px-4 py-2">Type</TableHead>
+                  <TableHead className="px-4 py-2 text-right w-36">Instances</TableHead>
+                  <TableHead className="px-4 py-2 w-20" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {typeRows.map((row, i) => {
                   const type = getBindingValue(row, "type");
                   const instances = parseInt(getBindingValue(row, "instances"), 10);
                   return (
-                    <tr
+                    <TableRow
                       key={type + i}
-                      className="border-b border-gray-50 group hover:bg-gray-50 transition-colors"
+                      className="border-b border-border group hover:bg-muted/50 transition-colors"
                     >
-                      <td className="px-4 py-2.5 max-w-0 w-full">
+                      <TableCell className="px-4 py-2.5 max-w-0 w-full">
                         <span
                           className="block truncate font-mono text-xs text-gray-700"
                           title={type}
@@ -802,16 +803,16 @@ function GraphDetailView({
                           {compressUri(type, displayPrefixes) ?? shortLabel(type)}
                         </span>
                         <span
-                          className="block truncate text-[0.65rem] text-gray-400 mt-0.5"
+                          className="block truncate text-[0.65rem] text-muted-foreground mt-0.5"
                           title={type}
                         >
                           {type}
                         </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-right text-gray-500 tabular-nums text-xs whitespace-nowrap">
+                      </TableCell>
+                      <TableCell className="px-4 py-2.5 text-right text-muted-foreground tabular-nums text-xs whitespace-nowrap">
                         {isNaN(instances) ? "—" : formatCount(instances)}
-                      </td>
-                      <td className="px-4 py-2.5">
+                      </TableCell>
+                      <TableCell className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
@@ -838,12 +839,12 @@ function GraphDetailView({
                             <i className="ri-list-unordered text-sm" />
                           </Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
         </div>
       </section>
@@ -993,7 +994,7 @@ export function GraphExplorerPage() {
             />
           )}
           {graphUri && focusType && (
-            <div className="flex-1 min-h-0 rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div className="flex-1 min-h-0 border border-gray-200 bg-white shadow-sm overflow-hidden">
               <SchemaExplorerView
                 graphUri={graphUri}
                 startType={focusType}

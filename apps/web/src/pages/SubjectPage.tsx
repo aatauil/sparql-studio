@@ -173,8 +173,8 @@ export function SubjectPage() {
     const pattern = isOutgoing ? "<subject> ?p ?o" : "?s ?p <subject>";
 
     return (
-      <section className={`${collapsed ? "shrink-0" : "flex-1 min-h-0"} rounded-lg border border-gray-200 bg-white shadow-sm flex flex-col`}>
-        <h2 className="text-sm font-semibold px-4 py-2.5 border-b border-gray-200 bg-gray-50 rounded-t-lg m-0 flex items-center gap-2 shrink-0">
+      <section className={`${collapsed ? "shrink-0" : "flex-1 min-h-0"} border border-gray-200 bg-white shadow-sm flex flex-col`}>
+        <h2 className="text-sm font-semibold px-4 py-2.5 border-b border-gray-200 bg-gray-50 m-0 flex items-center gap-2 shrink-0 cursor-pointer select-none hover:bg-gray-100 transition-colors" onClick={onToggleCollapse}>
           <i className={`${icon} ${iconColor} text-base shrink-0`} />
           <span>{dirLabel}</span>
           {!collapsed && <span className="font-normal text-gray-400 text-[0.7rem] font-mono">{pattern}</span>}
@@ -194,7 +194,7 @@ export function SubjectPage() {
             size="icon-xs"
             className="ml-1 text-gray-400 hover:text-gray-600"
             title={collapsed ? `Expand ${dirLabel}` : `Collapse ${dirLabel}`}
-            onClick={onToggleCollapse}
+            onClick={(e) => { e.stopPropagation(); onToggleCollapse(); }}
           >
             <i className={`${collapsed ? "ri-expand-vertical-line" : "ri-collapse-vertical-line"} text-sm`} />
           </Button>
