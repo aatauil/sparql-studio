@@ -82,7 +82,7 @@ function SavedQueryItem({
         <div className="flex items-center gap-1">
           {/* Color cycle dot */}
           <button
-            className="shrink-0 size-3 rounded-full border border-white/50 shadow-sm hover:scale-110 transition-transform"
+            className="shrink-0 size-3 rounded-full hover:scale-110 transition-transform"
             style={{ background: color }}
             onClick={(e) => { e.stopPropagation(); onColor(nextColor(color)); }}
             title="Cycle color"

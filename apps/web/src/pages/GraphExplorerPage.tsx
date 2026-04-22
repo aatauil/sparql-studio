@@ -981,7 +981,7 @@ export function GraphExplorerPage() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-h-0 flex flex-col gap-4 p-4 overflow-hidden bg-gray-100">
+        <div className="flex-1 min-h-0 flex flex-col gap-4 p-1 overflow-hidden bg-gray-100">
           {!graphUri && (
             <GraphListView query={graphListQuery} onSelectGraph={handleSelectGraph} />
           )}
