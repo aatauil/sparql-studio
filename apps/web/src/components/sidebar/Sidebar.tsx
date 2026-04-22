@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { PrefixEntry, QueryHistoryEntry, SavedQuery } from "../../storage";
 import { Button } from "../ui/button";
 import { HistoryPanel } from "./HistoryPanel";
@@ -26,6 +27,50 @@ interface LeftPanelProps {
   onHide: () => void;
 }
 
+function QueryPreviewPanel({
+  text,
+  anchorRef,
+  onClose,
+}: {
+  text: string;
+  anchorRef: React.RefObject<HTMLDivElement | null>;
+  onClose: () => void;
+}) {
+  const rect = anchorRef.current?.getBoundingClientRect();
+  if (!rect) return null;
+
+  return createPortal(
+    <div
+      className="fixed z-40 flex flex-col bg-white border border-gray-200 shadow-lg overflow-hidden"
+      style={{
+        left: rect.right,
+        top: rect.top,
+        width: 320,
+        height: rect.height,
+      }}
+    >
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-200 bg-gray-50 shrink-0">
+        <span className="text-[0.7rem] font-semibold text-gray-500 uppercase tracking-wide">Query preview</span>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-gray-400 hover:text-gray-600"
+          onClick={onClose}
+          title="Close preview"
+        >
+          <i className="ri-close-line" />
+        </Button>
+      </div>
+      <div className="flex-1 overflow-auto p-3">
+        <pre className="text-[0.68rem] text-gray-700 font-mono leading-relaxed whitespace-pre-wrap break-all">
+          {text}
+        </pre>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 export function LeftPanel({
   history,
   historyError,
@@ -42,12 +87,23 @@ export function LeftPanel({
   onAddPrefix,
   onTogglePrefix,
   onRemovePrefix,
-  onHide
+  onHide,
 }: LeftPanelProps) {
   const [view, setView] = useState<SidebarView>("saved");
+  const [previewText, setPreviewText] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  function handlePreview(text: string | null) {
+    setPreviewText(text);
+  }
+
+  function handleViewChange(next: SidebarView) {
+    setView(next);
+    setPreviewText(null);
+  }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-white border-r border-gray-200">
+    <div ref={containerRef} className="h-full flex flex-col overflow-hidden bg-white border-r border-gray-200">
       {/* Tab nav */}
       <div className="shrink-0 flex items-center border-b border-gray-200 bg-gray-50">
         <Button
@@ -57,7 +113,7 @@ export function LeftPanel({
               ? "border-blue-500 text-gray-900"
               : "border-transparent text-gray-500 hover:text-gray-700"
           }`}
-          onClick={() => setView("saved")}
+          onClick={() => handleViewChange("saved")}
         >
           <i className="ri-file-list-3-line" /> Queries
         </Button>
@@ -68,7 +124,7 @@ export function LeftPanel({
               ? "border-blue-500 text-gray-900"
               : "border-transparent text-gray-500 hover:text-gray-700"
           }`}
-          onClick={() => setView("history")}
+          onClick={() => handleViewChange("history")}
         >
           <i className="ri-history-line" /> History
         </Button>
@@ -79,7 +135,7 @@ export function LeftPanel({
               ? "border-blue-500 text-gray-900"
               : "border-transparent text-gray-500 hover:text-gray-700"
           }`}
-          onClick={() => setView("prefixes")}
+          onClick={() => handleViewChange("prefixes")}
         >
           <i className="ri-braces-line" /> Prefixes
         </Button>
@@ -105,11 +161,16 @@ export function LeftPanel({
             onRename={onRenameQuery}
             onColor={onColorQuery}
             onDelete={onDeleteQuery}
-          onDuplicate={onDuplicateQuery}
+            onDuplicate={onDuplicateQuery}
+            onPreview={handlePreview}
           />
         )}
         {view === "history" && (
-          <HistoryPanel history={history} error={historyError} />
+          <HistoryPanel
+            history={history}
+            error={historyError}
+            onPreview={handlePreview}
+          />
         )}
         {view === "prefixes" && (
           <PrefixPanel
@@ -121,6 +182,15 @@ export function LeftPanel({
           />
         )}
       </div>
+
+      {/* Side preview panel */}
+      {previewText !== null && (
+        <QueryPreviewPanel
+          text={previewText}
+          anchorRef={containerRef}
+          onClose={() => setPreviewText(null)}
+        />
+      )}
     </div>
   );
 }

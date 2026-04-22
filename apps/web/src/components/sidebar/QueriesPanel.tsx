@@ -1,5 +1,4 @@
 import { memo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import type { SavedQuery } from "../../storage";
 import { Button } from "../ui/button";
 
@@ -14,60 +13,9 @@ const QUERY_COLORS = [
   "#f97316", // orange
 ];
 
-function ColorPicker({
-  current,
-  onPick
-}: {
-  current?: string;
-  onPick: (color: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  function handlePick(color: string) {
-    onPick(color);
-    setOpen(false);
-  }
-
-  return (
-    <div className="relative" ref={ref}>
-      <Button
-        variant="ghost"
-        className="shrink-0 size-4 rounded-full border border-white/50 shadow-sm hover:scale-110 transition-transform p-0"
-        style={{ background: current ?? QUERY_COLORS[0] }}
-        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-        title="Change color"
-      />
-      {open && createPortal(
-        <div
-          className="fixed z-50"
-          style={(() => {
-            const r = ref.current?.getBoundingClientRect();
-            return r ? { left: r.right + 4, top: r.top } : {};
-          })()}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="bg-white border border-gray-200 rounded shadow-lg p-1.5 grid grid-cols-4 gap-1">
-            {QUERY_COLORS.map((c) => (
-              <Button
-                key={c}
-                variant="ghost"
-                className="size-5 rounded-full border-2 p-0 hover:scale-110 transition-transform"
-                style={{
-                  background: c,
-                  borderColor: c === (current ?? QUERY_COLORS[0]) ? "white" : "transparent",
-                  outline: c === (current ?? QUERY_COLORS[0]) ? `2px solid ${c}` : "none"
-                }}
-                onClick={() => handlePick(c)}
-                title={c}
-              />
-            ))}
-          </div>
-        </div>,
-        document.body
-      )}
-    </div>
-  );
+function nextColor(current: string): string {
+  const idx = QUERY_COLORS.indexOf(current);
+  return QUERY_COLORS[(idx + 1) % QUERY_COLORS.length];
 }
 
 function SavedQueryItem({
@@ -77,7 +25,9 @@ function SavedQueryItem({
   onRename,
   onColor,
   onDelete,
-  onDuplicate
+  onDuplicate,
+  onHoverStart,
+  onHoverEnd,
 }: {
   item: SavedQuery;
   isActive: boolean;
@@ -86,6 +36,8 @@ function SavedQueryItem({
   onColor: (color: string) => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onHoverStart: (text: string) => void;
+  onHoverEnd: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(item.title);
@@ -113,26 +65,34 @@ function SavedQueryItem({
 
   return (
     <div
-      className={`group flex items-stretch mb-1 cursor-pointer border transition-colors ${
+      className={`group flex items-stretch mb-1 cursor-pointer transition-colors ${
         isActive
-          ? "border-blue-300 bg-blue-50 hover:bg-blue-100"
-          : "border-gray-200 bg-zinc-100 hover:bg-gray-50"
+          ? "bg-blue-50 hover:bg-blue-100"
+          : "bg-zinc-100 hover:bg-gray-50"
       }`}
       onClick={onActivate}
+      onMouseEnter={() => onHoverStart(item.queryText)}
+      onMouseLeave={onHoverEnd}
     >
       {/* Color stripe */}
-      <div className="w-1 shrink-0 rounded-l" style={{ background: color }} />
+      <div className="w-1.5 shrink-0" style={{ background: color }} />
 
       <div className="flex-1 min-w-0 px-2 py-1.5">
         {/* Title row */}
-        <div className="flex items-center gap-1 mb-0.5">
-          <ColorPicker current={color} onPick={onColor} />
+        <div className="flex items-center gap-1">
+          {/* Color cycle dot */}
+          <button
+            className="shrink-0 size-3 rounded-full border border-white/50 shadow-sm hover:scale-110 transition-transform"
+            style={{ background: color }}
+            onClick={(e) => { e.stopPropagation(); onColor(nextColor(color)); }}
+            title="Cycle color"
+          />
 
           {editing ? (
             <input
               ref={inputRef}
               autoFocus
-              className="flex-1 text-[0.72rem] font-medium text-gray-900 bg-white border border-blue-400 rounded px-1 outline-none"
+              className="flex-1 text-[0.72rem] font-medium text-gray-900 bg-white border border-blue-400 px-1 outline-none"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onBlur={commitRename}
@@ -183,13 +143,6 @@ function SavedQueryItem({
           )}
         </div>
 
-        {/* Query preview */}
-        <div className="bg-white px-1 py-0.5 rounded">
-          <code className="block text-[0.58rem] text-gray-500 leading-snug line-clamp-2 break-all font-mono">
-            {item.queryText.slice(0, 100)}
-          </code>
-        </div>
-
         {/* Result badge */}
         {item.lastResultMeta && (
           <div className="mt-0.5 flex items-center gap-1">
@@ -214,7 +167,9 @@ export const QueriesPanel = memo(function QueriesPanel({
   onRename,
   onColor,
   onDelete,
-  onDuplicate
+  onDuplicate,
+  onHoverStart,
+  onHoverEnd,
 }: {
   queries: SavedQuery[];
   activeQueryId: string;
@@ -224,6 +179,8 @@ export const QueriesPanel = memo(function QueriesPanel({
   onColor: (id: string, color: string) => void;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
+  onHoverStart: (text: string) => void;
+  onHoverEnd: () => void;
 }) {
   return (
     <div className="pt-2">
@@ -245,6 +202,8 @@ export const QueriesPanel = memo(function QueriesPanel({
             onColor={(color) => onColor(item.id, color)}
             onDelete={() => onDelete(item.id)}
             onDuplicate={() => onDuplicate(item.id)}
+            onHoverStart={onHoverStart}
+            onHoverEnd={onHoverEnd}
           />
         ))
       )}
