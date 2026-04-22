@@ -18,6 +18,8 @@ import { useEscapeKey } from "./hooks/useEscapeKey"; // used for localhostModal
 import { useQueryManager } from "./hooks/useQueryManager";
 import { usePrefixManager, useDisplayPrefixes, DisplayPrefixContext } from "./hooks/usePrefixManager";
 import { useEndpointManager } from "./hooks/useEndpointManager";
+import { useConnectionStatus, type ConnectionStatus } from "./hooks/useConnectionStatus";
+import { useBridgeStatus, type BridgeStatus } from "./hooks/useBridgeStatus";
 import { ResultsPanel } from "./components/ResultsPanel";
 import { LeftPanel } from "./components/sidebar/Sidebar";
 import { EndpointPicker } from "./components/EndpointPicker";
@@ -59,6 +61,41 @@ function SparqlEditorSurface({
 }
 
 
+function BridgeBadge({ status, onClick }: { status: BridgeStatus; onClick: () => void }) {
+  const styles: Record<BridgeStatus, { badge: string; dot: string; label: string; title: string }> = {
+    unconfigured: { badge: "border-[#3a3a3a] text-[#9ca3af]",               dot: "bg-[#6b7280]",               label: "Bridge off",      title: "Bridge not configured — click to set up" },
+    checking:     { badge: "border-[#3a3a3a] text-[#9ca3af]",               dot: "bg-[#6b7280] animate-pulse", label: "Bridge…",         title: "Checking bridge…" },
+    active:       { badge: "border-[#1f4a2a] text-[#86efac] bg-[#0f2a17]",  dot: "bg-[#4ade80]",               label: "Bridge",          title: "Bridge is active — click to manage" },
+    error:        { badge: "border-[#4a1f1f] text-[#fca5a5] bg-[#2a0f0f]",  dot: "bg-[#ef4444]",               label: "Bridge error",    title: "Bridge unreachable — click to reconfigure" },
+  };
+  const { badge, dot, label, title } = styles[status];
+  return (
+    <button
+      className={`flex items-center gap-1.5 text-[0.7rem] font-medium px-2 py-0.5 rounded border shrink-0 cursor-pointer hover:brightness-125 transition-[filter] ${badge}`}
+      title={title}
+      onClick={onClick}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+      {label}
+    </button>
+  );
+}
+
+function ConnectionBadge({ status }: { status: ConnectionStatus }) {
+  const styles: Record<ConnectionStatus, { badge: string; dot: string; label: string }> = {
+    checking:     { badge: "border-[#3a3a3a] text-[#9ca3af]",               dot: "bg-[#6b7280] animate-pulse", label: "Checking…" },
+    connected:    { badge: "border-[#1f4a2a] text-[#86efac] bg-[#0f2a17]",  dot: "bg-[#4ade80]",               label: "Connected" },
+    disconnected: { badge: "border-[#4a1f1f] text-[#fca5a5] bg-[#2a0f0f]",  dot: "bg-[#ef4444]",               label: "Unreachable" },
+  };
+  const { badge, dot, label } = styles[status];
+  return (
+    <span className={`flex items-center gap-1.5 text-[0.7rem] font-medium px-2 py-0.5 rounded border shrink-0 ${badge}`}>
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+      {label}
+    </span>
+  );
+}
+
 function App() {
   const navigate = useNavigate();
   const { settings: loadedSettings, isLoaded: settingsLoaded, error: settingsError } = useSettings();
@@ -94,6 +131,19 @@ function App() {
   );
 
   const bridge = useMemo(() => new BridgeClient(settings.extensionId), [settings.extensionId]);
+
+  const connectionStatus = useConnectionStatus(
+    em.activeEndpoint?.url ?? "",
+    settings.timeoutMs,
+    settings.extensionId
+  );
+
+  const isLocalhost = em.activeEndpoint ? isLocalhostUrl(em.activeEndpoint.url) : false;
+  const bridgeStatus = useBridgeStatus(
+    isLocalhost ? (em.activeEndpoint?.url ?? "") : "",
+    settings.timeoutMs,
+    settings.extensionId
+  );
 
   useEscapeKey(localhostModalOpen, () => setLocalhostModalOpen(false));
 
@@ -277,15 +327,9 @@ function App() {
           onAdd={em.addEndpoint}
           onRemove={(id) => void em.removeEndpoint(id)}
         />
-        {em.activeEndpoint && isLocalhostUrl(em.activeEndpoint.url) && (
-          <Button
-            variant="secondary"
-            size="sm"
-            className="shrink-0"
-            onClick={() => setLocalhostModalOpen(true)}
-          >
-            {bridge.isAvailable() ? "Bridge active" : "Enable localhost querying"}
-          </Button>
+        {em.activeEndpoint && <ConnectionBadge status={connectionStatus} />}
+        {em.activeEndpoint && isLocalhost && (
+          <BridgeBadge status={bridgeStatus} onClick={() => setLocalhostModalOpen(true)} />
         )}
         <div className="ml-auto flex gap-1 shrink-0">
           <Button variant="secondary" size="sm" onClick={() => setSettingsOpen(true)}><i className="ri-settings-3-line" /> Settings</Button>
