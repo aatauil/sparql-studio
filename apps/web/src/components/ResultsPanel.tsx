@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { HttpResponseInfo, SparqlJsonResult } from "@sparql-studio/contracts";
-import { toCsv } from "../query-utils";
+import { toCsv, toTsv, toJson, toXml, toTurtle, toRdfXml, toNTriples } from "../query-utils";
 import { ResultsTable } from "./ResultsTable";
 import type { ResultMeta } from "../storage";
 export type { ResultMeta } from "../storage";
@@ -175,6 +175,24 @@ export function ResultsPanel({ result, meta, rawHttpResponse, onNavigateToSubjec
           <DropdownMenuContent align="start">
             <DropdownMenuItem onClick={() => result && downloadText(`results-${Date.now()}.csv`, toCsv(result), "text/csv;charset=utf-8")}>
               <i className="ri-file-text-line" /> CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => result && downloadText(`results-${Date.now()}.tsv`, toTsv(result), "text/tab-separated-values;charset=utf-8")}>
+              <i className="ri-file-text-line" /> TSV
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => result && downloadText(`results-${Date.now()}.json`, toJson(result), "application/json;charset=utf-8")}>
+              <i className="ri-braces-line" /> JSON
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => result && downloadText(`results-${Date.now()}.xml`, toXml(result), "application/sparql-results+xml;charset=utf-8")}>
+              <i className="ri-file-code-line" /> XML
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => result && downloadText(`results-${Date.now()}.ttl`, toTurtle(result), "text/turtle;charset=utf-8")}>
+              <i className="ri-leaf-line" /> Turtle
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => result && downloadText(`results-${Date.now()}.rdf`, toRdfXml(result), "application/rdf+xml;charset=utf-8")}>
+              <i className="ri-file-code-2-line" /> RDF/XML
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => result && downloadText(`results-${Date.now()}.nt`, toNTriples(result), "application/n-triples;charset=utf-8")}>
+              <i className="ri-list-check" /> N-Triples
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
