@@ -213,8 +213,8 @@ function App() {
 
   // ── Bridge verification ───────────────────────────────────────────────────
 
-  async function verifyBridge(extensionId: string): Promise<boolean> {
-    if (!em.activeEndpoint || !extensionId) return false;
+  async function verifyBridge(extensionId: string): Promise<{ ok: boolean; errorHint?: string }> {
+    if (!em.activeEndpoint || !extensionId) return { ok: false };
     const testBridge = new BridgeClient(extensionId);
     const response = await testBridge.healthCheck({
       endpointUrl: normalizeEndpointUrl(em.activeEndpoint.url),
@@ -225,7 +225,7 @@ function App() {
       setSettings(next);
       await settingsStore.set(next);
     }
-    return response.ok;
+    return { ok: response.ok, errorHint: response.ok ? undefined : response.error?.message };
   }
 
   // ── Restore last result when switching queries ────────────────────────────

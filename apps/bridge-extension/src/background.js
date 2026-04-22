@@ -16,8 +16,9 @@ async function testEndpoint(endpointUrl, timeoutMs) {
   try {
     const response = await fetch(endpointUrl, { method: "OPTIONS", signal });
     return { ok: response.ok || response.status < 500 };
-  } catch (_error) {
-    return { ok: false };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return { ok: false, detail };
   } finally {
     cleanup();
   }
@@ -98,7 +99,10 @@ chrome.runtime.onMessageExternal.addListener((message, _sender, sendResponse) =>
       if (result.ok) {
         sendResponse({ ok: true, requestId, data: { reachable: true } });
       } else {
-        sendResponse(createError(requestId, "ENDPOINT_UNREACHABLE", "Could not reach endpoint."));
+        const message = result.detail
+          ? `Could not reach endpoint: ${result.detail}`
+          : "Could not reach endpoint.";
+        sendResponse(createError(requestId, "ENDPOINT_UNREACHABLE", message));
       }
     });
     return true;

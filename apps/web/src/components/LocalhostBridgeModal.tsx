@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 interface LocalhostBridgeModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onVerify: (extensionId: string) => Promise<boolean>;
+  onVerify: (extensionId: string) => Promise<{ ok: boolean; errorHint?: string }>;
   endpointUrl: string;
   savedExtensionId: string;
 }
@@ -13,12 +13,15 @@ interface LocalhostBridgeModalProps {
 export function LocalhostBridgeModal({ open, onOpenChange, onVerify, endpointUrl, savedExtensionId }: LocalhostBridgeModalProps) {
   const [extensionId, setExtensionId] = useState(savedExtensionId ?? "");
   const [verifyState, setVerifyState] = useState<"idle" | "checking" | "ok" | "fail">("idle");
+  const [errorHint, setErrorHint] = useState<string | null>(null);
 
   async function handleVerify() {
     setVerifyState("checking");
+    setErrorHint(null);
     try {
-      const ok = await onVerify(extensionId);
-      setVerifyState(ok ? "ok" : "fail");
+      const result = await onVerify(extensionId);
+      setVerifyState(result.ok ? "ok" : "fail");
+      if (!result.ok && result.errorHint) setErrorHint(result.errorHint);
     } catch {
       /* extension messaging threw — show failure, not a frozen UI */
       setVerifyState("fail");
@@ -53,7 +56,7 @@ export function LocalhostBridgeModal({ open, onOpenChange, onVerify, endpointUrl
             className="field-input mt-1"
             placeholder="e.g. abcdefghijklmnopabcdefghijklmnop"
             value={extensionId}
-            onChange={(e) => { setExtensionId(e.target.value); setVerifyState("idle"); }}
+            onChange={(e) => { setExtensionId(e.target.value); setVerifyState("idle"); setErrorHint(null); }}
             onKeyDown={(e) => { if (e.key === "Enter") void handleVerify(); }}
             spellCheck={false}
           />
@@ -82,7 +85,9 @@ export function LocalhostBridgeModal({ open, onOpenChange, onVerify, endpointUrl
           <p className="text-xs text-green-600 font-medium">Connected! Extension ID saved — you can close this and run your query.</p>
         )}
         {verifyState === "fail" && (
-          <p className="text-xs text-destructive">Could not connect. Check the extension ID and make sure the extension is enabled.</p>
+          <p className="text-xs text-destructive">
+            Could not connect.{errorHint ? ` ${errorHint}` : " Check the extension ID and make sure the extension is enabled."}
+          </p>
         )}
       </DialogContent>
     </Dialog>
