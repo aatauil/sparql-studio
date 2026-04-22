@@ -30,11 +30,13 @@ interface LeftPanelProps {
 function QueryPreviewPanel({
   text,
   anchorRef,
-  onClose,
+  onMouseEnter,
+  onMouseLeave,
 }: {
   text: string;
   anchorRef: React.RefObject<HTMLDivElement | null>;
-  onClose: () => void;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
 }) {
   const rect = anchorRef.current?.getBoundingClientRect();
   if (!rect) return null;
@@ -48,18 +50,11 @@ function QueryPreviewPanel({
         width: 320,
         height: rect.height,
       }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-200 bg-gray-50 shrink-0">
+      <div className="px-3 py-1.5 border-b border-gray-200 bg-gray-50 shrink-0">
         <span className="text-[0.7rem] font-semibold text-gray-500 uppercase tracking-wide">Query preview</span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="text-gray-400 hover:text-gray-600"
-          onClick={onClose}
-          title="Close preview"
-        >
-          <i className="ri-close-line" />
-        </Button>
       </div>
       <div className="flex-1 overflow-auto p-3">
         <pre className="text-[0.68rem] text-gray-700 font-mono leading-relaxed whitespace-pre-wrap break-all">
@@ -92,8 +87,21 @@ export function LeftPanel({
   const [view, setView] = useState<SidebarView>("saved");
   const [previewText, setPreviewText] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function handlePreview(text: string | null) {
+  function scheduleClose() {
+    closeTimer.current = setTimeout(() => setPreviewText(null), 150);
+  }
+
+  function cancelClose() {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }
+
+  function handleHoverStart(text: string) {
+    cancelClose();
     setPreviewText(text);
   }
 
@@ -162,14 +170,16 @@ export function LeftPanel({
             onColor={onColorQuery}
             onDelete={onDeleteQuery}
             onDuplicate={onDuplicateQuery}
-            onPreview={handlePreview}
+            onHoverStart={handleHoverStart}
+            onHoverEnd={scheduleClose}
           />
         )}
         {view === "history" && (
           <HistoryPanel
             history={history}
             error={historyError}
-            onPreview={handlePreview}
+            onHoverStart={handleHoverStart}
+            onHoverEnd={scheduleClose}
           />
         )}
         {view === "prefixes" && (
@@ -183,12 +193,13 @@ export function LeftPanel({
         )}
       </div>
 
-      {/* Side preview panel */}
+      {/* Hover preview panel */}
       {previewText !== null && (
         <QueryPreviewPanel
           text={previewText}
           anchorRef={containerRef}
-          onClose={() => setPreviewText(null)}
+          onMouseEnter={cancelClose}
+          onMouseLeave={scheduleClose}
         />
       )}
     </div>

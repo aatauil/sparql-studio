@@ -39,24 +39,30 @@ function CopyButton({ text }: { text: string }) {
       onClick={(e) => { e.stopPropagation(); handleCopy(); }}
       title="Copy query to clipboard"
     >
-      {copied ? <i className="ri-check-line text-[0.65rem]" /> : <i className="ri-clipboard-line text-[0.65rem]" />}
+      {copied
+        ? <i className="ri-check-line text-[0.65rem]" />
+        : <i className="ri-clipboard-line text-[0.65rem]" />}
     </Button>
   );
 }
 
 function HistoryItem({
   item,
-  isPreviewActive,
-  onTogglePreview,
+  onHoverStart,
+  onHoverEnd,
 }: {
   item: QueryHistoryEntry;
-  isPreviewActive: boolean;
-  onTogglePreview: () => void;
+  onHoverStart: (text: string) => void;
+  onHoverEnd: () => void;
 }) {
   const stripeColor = item.status === "success" ? "#10b981" : "#ef4444";
 
   return (
-    <div className="group flex items-stretch mb-1 bg-zinc-100 hover:bg-gray-50 transition-colors">
+    <div
+      className="group flex items-stretch mb-1 bg-zinc-100 hover:bg-gray-50 transition-colors"
+      onMouseEnter={() => onHoverStart(item.queryText)}
+      onMouseLeave={onHoverEnd}
+    >
       {/* Status stripe */}
       <div className="w-1.5 shrink-0" style={{ background: stripeColor }} />
 
@@ -71,18 +77,7 @@ function HistoryItem({
           <span className="text-[0.68rem] text-gray-400 ml-auto">
             {item.status === "success" ? `${item.rowCount} rows` : "error"}
           </span>
-
-          {/* Actions — visible on hover */}
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-            <Button
-              variant="outline"
-              size="xs"
-              className={`text-gray-400 hover:text-gray-700 ${isPreviewActive ? "bg-gray-100 text-gray-700" : ""}`}
-              onClick={onTogglePreview}
-              title="Preview query"
-            >
-              <i className="ri-eye-line text-[0.65rem]" />
-            </Button>
             <CopyButton text={item.queryText} />
           </div>
         </div>
@@ -98,24 +93,14 @@ function HistoryItem({
 export const HistoryPanel = memo(function HistoryPanel({
   history,
   error,
-  onPreview,
+  onHoverStart,
+  onHoverEnd,
 }: {
   history: QueryHistoryEntry[];
   error: string | null;
-  onPreview: (text: string | null) => void;
+  onHoverStart: (text: string) => void;
+  onHoverEnd: () => void;
 }) {
-  const [previewingId, setPreviewingId] = useState<string | null>(null);
-
-  function togglePreview(id: string, text: string) {
-    if (previewingId === id) {
-      setPreviewingId(null);
-      onPreview(null);
-    } else {
-      setPreviewingId(id);
-      onPreview(text);
-    }
-  }
-
   if (error) {
     return <p className="px-3 py-4 text-xs text-red-500">{error}</p>;
   }
@@ -136,8 +121,8 @@ export const HistoryPanel = memo(function HistoryPanel({
             <HistoryItem
               key={item.id}
               item={item}
-              isPreviewActive={item.id === previewingId}
-              onTogglePreview={() => togglePreview(item.id, item.queryText)}
+              onHoverStart={onHoverStart}
+              onHoverEnd={onHoverEnd}
             />
           ))}
         </div>
