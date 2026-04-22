@@ -1,6 +1,7 @@
 import { memo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { SavedQuery } from "../../storage";
+import { Button } from "../ui/button";
 
 const QUERY_COLORS = [
   "#6b7280", // gray (default)
@@ -30,8 +31,9 @@ function ColorPicker({
 
   return (
     <div className="relative" ref={ref}>
-      <button
-        className="shrink-0 w-4 h-4 rounded-full border border-white/50 shadow-sm hover:scale-110 transition-transform"
+      <Button
+        variant="ghost"
+        className="shrink-0 size-4 rounded-full border border-white/50 shadow-sm hover:scale-110 transition-transform p-0"
         style={{ background: current ?? QUERY_COLORS[0] }}
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
         title="Change color"
@@ -47,9 +49,10 @@ function ColorPicker({
         >
           <div className="bg-white border border-gray-200 rounded shadow-lg p-1.5 grid grid-cols-4 gap-1">
             {QUERY_COLORS.map((c) => (
-              <button
+              <Button
                 key={c}
-                className="w-5 h-5 rounded-full border-2 hover:scale-110 transition-transform"
+                variant="ghost"
+                className="size-5 rounded-full border-2 p-0 hover:scale-110 transition-transform"
                 style={{
                   background: c,
                   borderColor: c === (current ?? QUERY_COLORS[0]) ? "white" : "transparent",
@@ -149,27 +152,33 @@ function SavedQueryItem({
           {/* Actions — visible on hover */}
           {!editing && (
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-              <button
-                className="btn-ghost-sm text-gray-400 hover:text-gray-700"
+              <Button
+                variant="outline"
+                size="xs"
+                className="text-gray-400 hover:text-gray-700"
                 onClick={startEdit}
                 title="Rename"
               >
                 <i className="ri-pencil-line text-[0.65rem]" />
-              </button>
-              <button
-                className="btn-ghost-sm text-gray-400 hover:text-gray-700"
+              </Button>
+              <Button
+                variant="outline"
+                size="xs"
+                className="text-gray-400 hover:text-gray-700"
                 onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
                 title="Duplicate query"
               >
                 <i className="ri-file-copy-line text-[0.65rem]" />
-              </button>
-              <button
-                className="btn-ghost-sm text-red-400 hover:text-red-600"
+              </Button>
+              <Button
+                variant="outline"
+                size="xs"
+                className="text-red-400 hover:text-red-600"
                 onClick={(e) => { e.stopPropagation(); onDelete(); }}
                 title="Delete query"
               >
                 <i className="ri-close-line" />
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -219,9 +228,9 @@ export const QueriesPanel = memo(function QueriesPanel({
   return (
     <div className="pt-2">
       <div className="px-3 pb-2">
-        <button className="btn w-full text-xs" onClick={onNewQuery}>
+        <Button variant="outline" size="sm" className="w-full" onClick={onNewQuery}>
           <i className="ri-add-line" /> New query
-        </button>
+        </Button>
       </div>
       {queries.length === 0 ? (
         <p className="px-3 py-4 text-xs text-gray-400">No queries yet.</p>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { PrefixEntry, QueryHistoryEntry, SavedQuery } from "../../storage";
+import { Button } from "../ui/button";
 import { HistoryPanel } from "./HistoryPanel";
 import { QueriesPanel } from "./QueriesPanel";
 import { PrefixPanel } from "./PrefixPanel";
@@ -49,8 +50,9 @@ export function LeftPanel({
     <div className="h-full flex flex-col overflow-hidden bg-white border-r border-gray-200">
       {/* Tab nav */}
       <div className="shrink-0 flex items-center border-b border-gray-200 bg-gray-50">
-        <button
-          className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+        <Button
+          variant="ghost"
+          className={`h-auto rounded-none px-3 py-1.5 font-medium border-b-2 ${
             view === "saved"
               ? "border-blue-500 text-gray-900"
               : "border-transparent text-gray-500 hover:text-gray-700"
@@ -58,9 +60,10 @@ export function LeftPanel({
           onClick={() => setView("saved")}
         >
           <i className="ri-file-list-3-line" /> Queries
-        </button>
-        <button
-          className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+        </Button>
+        <Button
+          variant="ghost"
+          className={`h-auto rounded-none px-3 py-1.5 font-medium border-b-2 ${
             view === "history"
               ? "border-blue-500 text-gray-900"
               : "border-transparent text-gray-500 hover:text-gray-700"
@@ -68,9 +71,10 @@ export function LeftPanel({
           onClick={() => setView("history")}
         >
           <i className="ri-history-line" /> History
-        </button>
-        <button
-          className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+        </Button>
+        <Button
+          variant="ghost"
+          className={`h-auto rounded-none px-3 py-1.5 font-medium border-b-2 ${
             view === "prefixes"
               ? "border-blue-500 text-gray-900"
               : "border-transparent text-gray-500 hover:text-gray-700"
@@ -78,14 +82,16 @@ export function LeftPanel({
           onClick={() => setView("prefixes")}
         >
           <i className="ri-braces-line" /> Prefixes
-        </button>
-        <button
-          className="ml-auto px-2 py-1.5 text-gray-400 hover:text-gray-600 text-base leading-none"
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="ml-auto text-gray-400 hover:text-gray-600"
           onClick={onHide}
           title="Hide panel"
         >
           <i className="ri-panel-left-close-line" />
-        </button>
+        </Button>
       </div>
 
       {/* Panel content */}

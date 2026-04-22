@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { Button } from "./ui/button";
 
 interface Props {
   children: ReactNode;
@@ -23,7 +24,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <pre style={{ whiteSpace: "pre-wrap", color: "#b91c1c" }}>
             {this.state.error.message}
           </pre>
-          <button onClick={() => this.setState({ error: null })}>Try again</button>
+          <Button variant="outline" size="sm" onClick={() => this.setState({ error: null })}>Try again</Button>
         </div>
       );
     }

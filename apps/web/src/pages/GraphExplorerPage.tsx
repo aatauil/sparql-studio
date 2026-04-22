@@ -23,6 +23,7 @@ import { GRAPH_LIST_LIMIT, TYPES_LIMIT } from "../config";
 import { DisplayPrefixContext, usePageDisplayPrefixes } from "../hooks/usePrefixManager";
 import { compressUri, shortLabel, getBindingValue } from "../query-utils";
 import { BridgeClient } from "../bridge";
+import { Button } from "../components/ui/button";
 import { directFetch, isLocalhostUrl, normalizeEndpointUrl } from "../sparql-fetch";
 import type { BridgeResponse, SparqlJsonResult } from "@sparql-studio/contracts";
 
@@ -147,6 +148,7 @@ type ExplorerNodeData = {
   isProxy: boolean;
   proxyTargetUri?: string;
   predicates?: string[];
+  properties?: string[];
 };
 
 const ExplorerActionsContext = createContext<{
@@ -170,6 +172,13 @@ function ExplorerNode({ data }: NodeProps) {
           <i className="ri-crosshair-line text-gray-400 text-xs shrink-0" />
           <span className="font-medium text-gray-500 text-xs break-all flex-1">{d.label}</span>
         </div>
+        {d.predicates && d.predicates.length > 0 && (
+          <div className="mt-1.5 flex flex-col gap-0.5">
+            {d.predicates.map((p) => (
+              <span key={p} className="text-[0.6rem] text-gray-400 break-all" title={p}>{p}</span>
+            ))}
+          </div>
+        )}
         <Handle type="source" position={Position.Right} style={{ background: "#9ca3af", width: 8, height: 8 }} />
       </div>
     );
@@ -195,28 +204,39 @@ function ExplorerNode({ data }: NodeProps) {
       {d.predicates && d.predicates.length > 0 && (
         <div className="mt-1.5 flex flex-col gap-0.5">
           {d.predicates.map((p) => (
-            <span key={p} className="text-[0.6rem] text-gray-400 truncate" title={p}>{p}</span>
+            <span key={p} className="text-[0.6rem] text-gray-400 break-all" title={p}>{p}</span>
+          ))}
+        </div>
+      )}
+      {d.properties && d.properties.length > 0 && (
+        <div className="mt-1 pt-1 border-t border-gray-100 flex flex-col gap-0.5">
+          {d.properties.map((p) => (
+            <span key={p} className="text-[0.6rem] text-purple-400 break-all" title={p}>
+              <i className="ri-price-tag-3-line mr-0.5" />{p}
+            </span>
           ))}
         </div>
       )}
       {/* Node action buttons — visible on hover */}
       <div className="absolute top-1 right-1 flex items-center gap-0.5 opacity-0 group-hover/node:opacity-100 transition-opacity">
         {d.expanded && !d.isStart && (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-xs"
             title="Collapse"
-            className="p-0.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors"
             onClick={(e) => { e.stopPropagation(); actions?.collapse(d.uri); }}
           >
             <i className="ri-subtract-line text-[0.65rem]" />
-          </button>
+          </Button>
         )}
-        <button
+        <Button
+          variant="ghost"
+          size="icon-xs"
           title="Hide node"
-          className="p-0.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors"
           onClick={(e) => { e.stopPropagation(); actions?.hide(d.uri); }}
         >
           <i className="ri-eye-off-line text-[0.65rem]" />
-        </button>
+        </Button>
       </div>
       <Handle type="source" position={Position.Right} style={{ background: "#93c5fd", width: 8, height: 8 }} />
     </div>
@@ -319,14 +339,23 @@ function SchemaExplorerInner({
         : directFetch(url, query, timeoutMs);
   }, [endpointUrl, timeoutMs, extensionId]);
 
-  function makeNode(uri: string, isStart: boolean, predicates: string[] = []): Node {
+  function displayLabel(uri: string): string {
+    const compressed = compressUri(uri, displayPrefixesRef.current);
+    if (compressed) return compressed;
+    const afterHash = uri.split("#").pop() ?? "";
+    const afterSlash = uri.split("/").pop() ?? "";
+    const local = afterHash.length > 1 ? afterHash : afterSlash;
+    return local.length > 0 ? local : uri;
+  }
+
+  function makeNode(uri: string, isStart: boolean, predicates: string[] = [], properties: string[] = []): Node {
     const instances = instanceMap.get(uri);
     return {
       id: uri,
       type: "explorerNode",
       position: { x: 0, y: 0 },
       data: {
-        label: compressUri(uri, displayPrefixesRef.current) ?? shortLabel(uri),
+        label: displayLabel(uri),
         uri,
         instances: instances != null ? formatCount(instances) : null,
         expanded: false,
@@ -335,6 +364,7 @@ function SchemaExplorerInner({
         highlighted: false,
         isProxy: false,
         predicates,
+        properties,
       } satisfies ExplorerNodeData,
     };
   }
@@ -345,7 +375,7 @@ function SchemaExplorerInner({
       type: "explorerNode",
       position: { x: 0, y: 0 },
       data: {
-        label: compressUri(targetUri, displayPrefixesRef.current) ?? shortLabel(targetUri),
+        label: displayLabel(targetUri),
         uri: targetUri,
         instances: null,
         expanded: true,
@@ -444,8 +474,30 @@ function SchemaExplorerInner({
       `LIMIT ${TYPE_EXPANSION_LIMIT}`,
     ].join("\n");
 
-    const response = await executeRef.current(query);
+    const propsQuery = [
+      `SELECT DISTINCT ?predicate`,
+      `WHERE {`,
+      `  GRAPH <${graphUri}> {`,
+      `    ?s a <${typeUri}> .`,
+      `    ?s ?predicate ?val .`,
+      `    FILTER(isLiteral(?val))`,
+      `  }`,
+      `}`,
+      `LIMIT 20`,
+    ].join("\n");
+
+    const [response, propsResponse] = await Promise.all([
+      executeRef.current(query),
+      executeRef.current(propsQuery),
+    ]);
     if (!mountedRef.current) return;
+
+    const typeProperties: string[] = propsResponse.ok
+      ? propsResponse.data.results.bindings
+          .map((row) => getBindingValue(row, "predicate"))
+          .filter(Boolean)
+          .map((pred) => displayLabel(pred))
+      : [];
 
     if (response.ok) {
       const rows = response.data.results.bindings;
@@ -497,7 +549,7 @@ function SchemaExplorerInner({
         const other = getBindingValue(row, "otherType");
         if (!pred || !other) continue;
         const resolvedOther = proxyIdByTarget.get(other) ?? other;
-        const predLabel = compressUri(pred, displayPrefixesRef.current) ?? shortLabel(pred);
+        const predLabel = displayLabel(pred);
         if (!predicatesByNode.has(resolvedOther)) predicatesByNode.set(resolvedOther, []);
         const list = predicatesByNode.get(resolvedOther)!;
         if (!list.includes(predLabel)) list.push(predLabel);
@@ -532,7 +584,7 @@ function SchemaExplorerInner({
         // Existing nodes: update data only — positions stay exactly as-is;
         // accumulate any new predicates if this node gets additional edges
         ...nodesRef.current.map((n) => {
-          if (n.id === typeUri) return { ...n, data: { ...n.data, loading: false, expanded: true } };
+          if (n.id === typeUri) return { ...n, data: { ...n.data, loading: false, expanded: true, properties: typeProperties } };
           const newPreds = predicatesByNode.get(n.id);
           if (!newPreds) return n;
           const existing = (n.data as ExplorerNodeData).predicates ?? [];
@@ -620,24 +672,28 @@ function SchemaExplorerInner({
           <div className="absolute top-2 right-2 z-10 bg-white border border-gray-200 rounded-lg shadow-md p-2 min-w-[160px] max-w-[240px]">
             <div className="flex items-center justify-between mb-1.5 gap-2">
               <span className="text-xs font-semibold text-gray-600">{hiddenList.length} hidden</span>
-              <button
-                className="text-[0.65rem] text-blue-500 hover:underline shrink-0"
+              <Button
+                variant="link"
+                size="xs"
+                className="shrink-0 h-auto p-0 text-[0.65rem]"
                 onClick={unhideAll}
               >
                 Unhide all
-              </button>
+              </Button>
             </div>
             <div className="flex flex-col gap-0.5 max-h-48 overflow-y-auto">
               {hiddenList.map(({ uri, label }) => (
                 <div key={uri} className="flex items-center gap-1 group">
                   <span className="text-[0.65rem] text-gray-500 truncate flex-1 min-w-0" title={uri}>{label}</span>
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
                     title="Unhide"
-                    className="shrink-0 p-0.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors opacity-0 group-hover:opacity-100"
+                    className="shrink-0 opacity-0 group-hover:opacity-100"
                     onClick={() => unhideNode(uri)}
                   >
                     <i className="ri-eye-line text-[0.65rem]" />
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
@@ -757,8 +813,10 @@ function GraphDetailView({
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
-                          <button
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-blue-100 text-blue-500"
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-500 hover:bg-blue-100"
                             title="Explore data model"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -766,9 +824,11 @@ function GraphDetailView({
                             }}
                           >
                             <i className="ri-node-tree text-sm" />
-                          </button>
-                          <button
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-100 text-gray-400"
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400"
                             title="Browse instances"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -776,7 +836,7 @@ function GraphDetailView({
                             }}
                           >
                             <i className="ri-list-unordered text-sm" />
-                          </button>
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -887,10 +947,10 @@ export function GraphExplorerPage() {
     <DisplayPrefixContext.Provider value={displayPrefixes}>
       <main className="h-screen overflow-hidden flex flex-col">
         {/* Toolbar */}
-        <div className="flex items-center gap-3 px-3 py-1.5 bg-[#1e1e1e] text-sm border-b border-[#333] shrink-0">
-          <button className="btn-dark" onClick={handleBack} aria-label="Go back">
+        <div className="dark flex items-center gap-3 px-3 py-1.5 bg-[#1e1e1e] text-sm border-b border-[#333] shrink-0">
+          <Button variant="secondary" size="sm" onClick={handleBack} aria-label="Go back">
             <i className="ri-arrow-left-line" /> Back
-          </button>
+          </Button>
           <i className="ri-node-tree text-gray-400 shrink-0" />
           <span className="font-semibold text-white">Graph Explorer</span>
           {graphUri && (

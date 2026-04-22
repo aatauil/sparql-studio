@@ -8,6 +8,7 @@ import type { SparqlJsonResult } from "@sparql-studio/contracts";
 import { SUBJECT_LIMIT, EXCLUDED_GRAPHS_KEY } from "../config";
 import { usePageDisplayPrefixes, DisplayPrefixContext } from "../hooks/usePrefixManager";
 import { shortLabel } from "../query-utils";
+import { Button } from "../components/ui/button";
 
 function loadExcludedGraphs(): Set<string> {
   try {
@@ -72,36 +73,30 @@ function GraphFilterBar({
       {visible.map((g) => {
         const isExcluded = excluded.has(g);
         return (
-          <button
+          <Button
             key={g}
-            className={`flex items-center gap-1 px-1.5 py-0.5 rounded border transition-colors ${
-              isExcluded
-                ? "bg-gray-100 border-gray-300 text-gray-400 line-through"
-                : "bg-white border-blue-300 text-blue-700 hover:bg-blue-50"
-            }`}
+            variant="outline"
+            size="xs"
+            className={isExcluded
+              ? "bg-gray-100 border-gray-300 text-gray-400 line-through"
+              : "bg-white border-blue-300 text-blue-700 hover:bg-blue-50"}
             title={isExcluded ? `Click to re-include: ${g}` : `Click to exclude: ${g}`}
             onClick={() => onToggle(g)}
           >
             {isExcluded ? <i className="ri-eye-off-line text-[0.6rem]" /> : <i className="ri-eye-line text-[0.6rem]" />}
             {graphLabel(g)}
-          </button>
+          </Button>
         );
       })}
       {!expanded && hidden > 0 && (
-        <button
-          className="px-1.5 py-0.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100"
-          onClick={() => setExpanded(true)}
-        >
+        <Button variant="outline" size="xs" onClick={() => setExpanded(true)}>
           +{hidden} more
-        </button>
+        </Button>
       )}
       {expanded && hidden > 0 && (
-        <button
-          className="px-1.5 py-0.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100"
-          onClick={() => setExpanded(false)}
-        >
+        <Button variant="outline" size="xs" onClick={() => setExpanded(false)}>
           Show less
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -194,13 +189,15 @@ export function SubjectPage() {
               {shownCount.toLocaleString()} triple{shownCount !== 1 ? "s" : ""}
             </span>
           )}
-          <button
-            className="ml-1 text-gray-400 hover:text-gray-600 transition-colors"
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="ml-1 text-gray-400 hover:text-gray-600"
             title={collapsed ? `Expand ${dirLabel}` : `Collapse ${dirLabel}`}
             onClick={onToggleCollapse}
           >
             <i className={`${collapsed ? "ri-expand-vertical-line" : "ri-collapse-vertical-line"} text-sm`} />
-          </button>
+          </Button>
         </h2>
         {!collapsed && isCapped && (
           <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border-b border-amber-200 text-amber-800 text-xs shrink-0">
@@ -263,9 +260,10 @@ export function SubjectPage() {
     <DisplayPrefixContext.Provider value={displayPrefixes}>
     <main className="h-screen overflow-hidden flex flex-col">
       {/* Toolbar */}
-      <div className="flex items-center gap-3 px-3 py-1.5 bg-[#1e1e1e] text-sm border-b border-[#333] shrink-0">
-        <button
-          className="btn-dark"
+      <div className="dark flex items-center gap-3 px-3 py-1.5 bg-[#1e1e1e] text-sm border-b border-[#333] shrink-0">
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => {
             if (breadcrumbs.length > 0) {
               navigate("/subject?uri=" + encodeURIComponent(breadcrumbs[breadcrumbs.length - 1]), {
@@ -278,7 +276,7 @@ export function SubjectPage() {
           aria-label="Go back"
         >
           <i className="ri-arrow-left-line" /> Back
-        </button>
+        </Button>
         <span className="font-semibold text-white">Subject</span>
         {pinnedGraph && (
           <span
@@ -293,41 +291,47 @@ export function SubjectPage() {
           {uri || "—"}
         </span>
         {!pinnedGraph && (
-          <button
-            className={`btn-dark text-xs shrink-0 ${showGraphs ? "ring-1 ring-blue-400 text-blue-300" : ""}`}
+          <Button
+            variant="secondary"
+            size="sm"
+            className={`shrink-0 ${showGraphs ? "ring-1 ring-blue-400 text-blue-300" : ""}`}
             onClick={() => setShowGraphs((v) => !v)}
             title={showGraphs
               ? "Graph mode on — queries include ?g column. Note: triples in the default graph are not shown in this mode."
               : "Show which named graph each triple belongs to (re-runs queries)"}
           >
             <i className="ri-node-tree" /> {showGraphs ? "Graphs on" : "Show graphs"}
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Breadcrumbs */}
       {breadcrumbs.length > 0 && (
-        <div className="flex items-center gap-1 px-3 py-1.5 bg-[#1e1e1e] text-xs shrink-0 border-b border-[#333] overflow-x-auto">
+        <div className="dark flex items-center gap-1 px-3 py-1.5 bg-[#1e1e1e] text-xs shrink-0 border-b border-[#333] overflow-x-auto">
           {/* Home pill */}
-          <button
-            className="flex items-center gap-1 px-2 py-0.5 rounded-sm bg-[#2a2a2a] text-[#6b7280] hover:bg-[#3a3a3a] hover:text-[#9ca3af] transition-colors shrink-0"
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="shrink-0 text-muted-foreground"
             title="Back to origin"
             onClick={() => navigate(origin)}
           >
             <i className="ri-home-4-line text-[10px]" />
-          </button>
+          </Button>
 
           {breadcrumbs.map((crumb, i) => (
             <span key={crumb + i} className="flex items-center gap-1 min-w-0">
               <i className="ri-arrow-right-s-line text-[#444] shrink-0" />
               {/* Visited (non-active ancestor) pill */}
-              <button
-                className="flex items-center px-2 py-0.5 rounded-sm bg-[#252525] text-[#6b7280] hover:bg-[#2f2f2f] hover:text-[#d1d5db] transition-colors truncate max-w-[140px] border border-[#333] hover:border-[#555]"
+              <Button
+                variant="outline"
+                size="xs"
+                className="truncate max-w-[140px] text-muted-foreground"
                 title={crumb}
                 onClick={() => handleBreadcrumbClick(i)}
               >
                 {shortLabel(crumb)}
-              </button>
+              </Button>
             </span>
           ))}
 

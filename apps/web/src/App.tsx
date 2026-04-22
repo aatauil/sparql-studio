@@ -24,6 +24,7 @@ import { EndpointPicker } from "./components/EndpointPicker";
 import { LocalhostBridgeModal } from "./components/LocalhostBridgeModal";
 import { Group as PanelGroup, Panel, Separator } from "react-resizable-panels";
 import { uid } from "./config";
+import { Button } from "./components/ui/button";
 
 function SparqlEditorSurface({
   value,
@@ -219,12 +220,14 @@ function App() {
   const editorSection = (
     <div className="h-full flex flex-col overflow-hidden bg-white">
       <div className="shrink-0 flex flex-wrap gap-1.5 px-2.5 py-1.5 border-b border-gray-200 bg-gray-50">
-        <button className="btn bg-green-600 text-white hover:bg-green-700" disabled={isRunning} onClick={() => void runQuery()}>
+        <Button className="bg-green-600 text-white hover:bg-green-700" disabled={isRunning} onClick={() => void runQuery()}>
           <i className={isRunning ? "ri-loader-4-line" : "ri-play-line"} /> {isRunning ? "Running..." : "Run query"}
-        </button>
+        </Button>
         {pm.prefixes.length > 0 && (
-          <button
-            className={`text-xs rounded px-1.5 py-0.5 shrink-0 self-center border transition-colors ${
+          <Button
+            variant="outline"
+            size="xs"
+            className={`self-center ${
               pm.globalPrefixesOn
                 ? "text-green-700 bg-green-100 border-green-300 hover:bg-green-200"
                 : "text-gray-500 bg-gray-100 border-gray-300 hover:bg-gray-200"
@@ -236,7 +239,7 @@ function App() {
             {pm.globalPrefixesOn
               ? `${pm.activePrefixCount} prefix${pm.activePrefixCount !== 1 ? "es" : ""} active`
               : "Prefixes off"}
-          </button>
+          </Button>
         )}
       </div>
       <SparqlEditorSurface
@@ -297,15 +300,17 @@ function App() {
           onRemove={(id) => void em.removeEndpoint(id)}
         />
         {em.activeEndpoint && isLocalhostUrl(em.activeEndpoint.url) && (
-          <button
-            className="btn-dark text-xs shrink-0"
+          <Button
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
             onClick={() => setLocalhostModalOpen(true)}
           >
             {bridge.isAvailable() ? "Bridge active" : "Enable localhost querying"}
-          </button>
+          </Button>
         )}
         <div className="ml-auto flex gap-1 shrink-0">
-          <button className="btn-dark" onClick={() => setSettingsOpen(true)}><i className="ri-settings-3-line" /> Settings</button>
+          <Button variant="secondary" size="sm" onClick={() => setSettingsOpen(true)}><i className="ri-settings-3-line" /> Settings</Button>
         </div>
       </div>
 
@@ -371,8 +376,9 @@ function App() {
             />
           </label>
           <div className="flex gap-2 mt-3">
-            <button
-              className="btn"
+            <Button variant="outline" size="sm" onClick={() => setSettingsOpen(false)}>Cancel</Button>
+            <Button
+              size="sm"
               onClick={async () => {
                 const next = { ...settings, timeoutMs: settingsDraft.timeoutMs };
                 setSettings(next);
@@ -381,7 +387,7 @@ function App() {
               }}
             >
               Save
-            </button>
+            </Button>
             <button className="btn" onClick={() => setSettingsOpen(false)}>Cancel</button>
           </div>
         </Modal>

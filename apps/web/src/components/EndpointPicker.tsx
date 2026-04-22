@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { EndpointEntry } from "../storage";
-import { useEscapeKey } from "../hooks/useEscapeKey";
+import { Button } from "./ui/button";
 
 interface EndpointPickerProps {
   endpoints: EndpointEntry[];
@@ -100,14 +100,15 @@ export function EndpointPicker({ endpoints, activeId, error, onSelect, onAdd, on
               value={addUrl}
               onChange={(e) => setAddUrl(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") void handleAdd(); }}
-            />
-            <button
-              className="btn-dark text-xs py-1"
-              onClick={() => void handleAdd()}
-            >
-              Add endpoint
-            </button>
-          </div>
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            className="w-full"
+            onClick={() => void handleAdd()}
+          >
+            Add endpoint
+          </Button>
         </div>
       )}
     </div>

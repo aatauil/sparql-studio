@@ -5,6 +5,8 @@ import { ResultsTable } from "./ResultsTable";
 import type { ResultMeta } from "../storage";
 export type { ResultMeta } from "../storage";
 import { DISPLAY_CAP, JSON_CAP } from "../config";
+import { Button } from "./ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 
 interface ResultsPanelProps {
   result: SparqlJsonResult | null;
@@ -87,7 +89,6 @@ function downloadText(filename: string, text: string, mimeType: string): void {
 
 export function ResultsPanel({ result, meta, rawHttpResponse, onNavigateToSubject }: ResultsPanelProps) {
   const [view, setView] = useState<ResultsView>("table");
-  const [exportOpen, setExportOpen] = useState(false);
 
   const errorLabel =
     meta?.errorCode === "TIMEOUT"
@@ -130,8 +131,9 @@ export function ResultsPanel({ result, meta, rawHttpResponse, onNavigateToSubjec
       {/* Toolbar */}
       <div className="shrink-0 flex items-center border-b border-gray-200 bg-gray-50">
         {/* Tabs */}
-        <button
-          className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+        <Button
+          variant="ghost"
+          className={`h-auto rounded-none px-3 py-1.5 font-medium border-b-2 ${
             view === "table"
               ? "border-blue-500 text-gray-900"
               : "border-transparent text-gray-500 hover:text-gray-700"
@@ -139,9 +141,10 @@ export function ResultsPanel({ result, meta, rawHttpResponse, onNavigateToSubjec
           onClick={() => setView("table")}
         >
           <i className="ri-table-2" /> Table
-        </button>
-        <button
-          className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+        </Button>
+        <Button
+          variant="ghost"
+          className={`h-auto rounded-none px-3 py-1.5 font-medium border-b-2 ${
             view === "json"
               ? "border-blue-500 text-gray-900"
               : "border-transparent text-gray-500 hover:text-gray-700"
@@ -149,9 +152,10 @@ export function ResultsPanel({ result, meta, rawHttpResponse, onNavigateToSubjec
           onClick={() => setView("json")}
         >
           <i className="ri-braces-line" /> JSON
-        </button>
-        <button
-          className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+        </Button>
+        <Button
+          variant="ghost"
+          className={`h-auto rounded-none px-3 py-1.5 font-medium border-b-2 ${
             view === "response"
               ? "border-blue-500 text-gray-900"
               : "border-transparent text-gray-500 hover:text-gray-700"
@@ -159,34 +163,21 @@ export function ResultsPanel({ result, meta, rawHttpResponse, onNavigateToSubjec
           onClick={() => setView("response")}
         >
           <i className="ri-wifi-line" /> Response
-        </button>
+        </Button>
 
         {/* Export */}
-        <div className="relative ml-2">
-          <button
-            className="btn"
-            disabled={!result}
-            onClick={() => setExportOpen((v) => !v)}
-          >
-            <i className="ri-download-2-line" /> Export
-          </button>
-          {exportOpen && result && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
-              <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded shadow-md min-w-[110px]">
-                <button
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100"
-                  onClick={() => {
-                    downloadText(`results-${Date.now()}.csv`, toCsv(result), "text/csv;charset=utf-8");
-                    setExportOpen(false);
-                  }}
-                >
-                  <i className="ri-file-text-line" /> CSV
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="ml-2" disabled={!result}>
+              <i className="ri-download-2-line" /> Export
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={() => result && downloadText(`results-${Date.now()}.csv`, toCsv(result), "text/csv;charset=utf-8")}>
+              <i className="ri-file-text-line" /> CSV
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Meta */}
         {meta && (

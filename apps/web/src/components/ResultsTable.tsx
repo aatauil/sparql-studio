@@ -4,6 +4,7 @@ import type { SparqlJsonResult } from "@sparql-studio/contracts";
 import { isUri, compressUri } from "../query-utils";
 import { ESTIMATED_ROW_HEIGHT } from "../config";
 import { DisplayPrefixContext } from "../hooks/usePrefixManager";
+import { Button } from "./ui/button";
 
 interface ResultsTableProps {
   result: SparqlJsonResult;
@@ -62,8 +63,9 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
           <tr>
             {columns.map((column) => (
               <th key={column} className="border border-gray-300 px-2 py-[3px] text-left sticky top-0 bg-white z-10">
-                <button
-                  className="bg-transparent border-none font-semibold cursor-pointer p-0"
+                <Button
+                  variant="ghost"
+                  className="h-auto p-0 font-semibold"
                   onClick={() => {
                     if (sortBy === column) {
                       setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
@@ -75,7 +77,7 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
                   aria-label={`Sort by ${column}`}
                 >
                   {column} {sortBy === column ? <i className={sortDir === "asc" ? "ri-arrow-up-s-fill" : "ri-arrow-down-s-fill"} /> : ""}
-                </button>
+                </Button>
               </th>
             ))}
             <th className="border border-gray-300 px-2 py-[3px] text-left sticky top-0 bg-white z-10">Actions</th>
@@ -103,27 +105,30 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
                           <div className="text-[0.65rem] text-gray-400 font-mono leading-tight mt-0.5 break-all">{value}</div>
                         )}
                         <div className="absolute top-0 right-0 hidden group-hover:flex gap-0.5 p-0.5">
-                          <button
-                            className="btn-ghost-sm"
+                          <Button
+                            variant="outline"
+                            size="xs"
                             title="Copy to clipboard"
                             onClick={() => triggerCopy(cellKey, "<" + value + ">")}
                           >
                             {isCopied ? "Copied!" : <i className="ri-file-copy-line" />}
-                          </button>
-                          <button
-                            className="btn-ghost-sm"
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="xs"
                             title="Open URI in new tab"
                             onClick={() => window.open(value, "_blank", "noreferrer")}
                           >
                             <i className="ri-external-link-line" />
-                          </button>
-                          <button
-                            className="btn-ghost-sm"
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="xs"
                             title="Open subject page"
                             onClick={() => onNavigateToSubject(value)}
                           >
                             <i className="ri-article-line" />
-                          </button>
+                          </Button>
                         </div>
                       </td>
                     );
@@ -135,13 +140,14 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
                       {value}
                       {value && (
                         <div className="absolute top-0 right-0 hidden group-hover:flex gap-0.5 p-0.5 bg-white/90">
-                          <button
-                            className="btn-ghost-sm"
+                          <Button
+                            variant="outline"
+                            size="xs"
                             title="Copy to clipboard"
                             onClick={() => triggerCopy(cellKey, value)}
                           >
                             {isCopied ? "Copied!" : <i className="ri-file-copy-line" />}
-                          </button>
+                          </Button>
                         </div>
                       )}
                     </td>
@@ -151,15 +157,16 @@ export function ResultsTable({ result, onNavigateToSubject }: ResultsTableProps)
                   {(() => {
                     const rowKey = `row:${vRow.index}`;
                     return (
-                      <button
-                        className="btn-ghost-sm"
+                      <Button
+                        variant="outline"
+                        size="xs"
                         onClick={() => {
                           const values = columns.map((col) => row[col]?.value ?? "");
                           triggerCopy(rowKey, values.join("\t"));
                         }}
                       >
                         {copiedKey === rowKey ? "Copied!" : "Copy row"}
-                      </button>
+                      </Button>
                     );
                   })()}
                 </td>

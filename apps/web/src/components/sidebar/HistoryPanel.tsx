@@ -1,6 +1,7 @@
 import { memo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { QueryHistoryEntry } from "../../storage";
+import { Button } from "../ui/button";
 
 function dateBucket(ts: number): string {
   const now = new Date();
@@ -32,13 +33,15 @@ function CopyButton({ text }: { text: string }) {
   }
 
   return (
-    <button
-      className="btn-ghost-sm shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+    <Button
+      variant="outline"
+      size="xs"
+      className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
       onClick={handleCopy}
       title="Copy query to clipboard"
     >
       {copied ? "Copied!" : "Copy"}
-    </button>
+    </Button>
   );
 }
 

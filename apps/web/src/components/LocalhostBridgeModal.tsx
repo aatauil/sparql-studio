@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button } from "./ui/button";
 
 interface LocalhostBridgeModalProps {
   onClose: () => void;
@@ -64,23 +65,22 @@ export function LocalhostBridgeModal({ onClose, onVerify, endpointUrl, savedExte
         </label>
 
         <div className="flex flex-wrap gap-2 items-center">
-          <a
-            href="/bridge-extension.zip"
-            download="bridge-extension.zip"
-            className="btn"
-          >
-            Download bridge extension
-          </a>
+          <Button variant="outline" size="sm" asChild>
+            <a href="/bridge-extension.zip" download="bridge-extension.zip">
+              Download bridge extension
+            </a>
+          </Button>
 
-          <button
-            className="btn"
+          <Button
+            variant="outline"
+            size="sm"
             disabled={verifyState === "checking" || !(extensionId ?? "").trim()}
             onClick={() => void handleVerify()}
           >
             {verifyState === "checking" ? "Verifying…" : "Verify connection"}
-          </button>
+          </Button>
 
-          <button className="btn" onClick={onClose}>Close</button>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Close</Button>
         </div>
 
         {verifyState === "ok" && (
