@@ -34,12 +34,16 @@ body {
   /* ── Editor mount target ─────────────────────────────────── */
 
   .editorHost {
-    @apply flex-1 min-h-0 overflow-auto;
+    @apply flex-1 min-h-0 overflow-hidden flex flex-col;
   }
 
-  /* Bigger editor font */
   .editorHost .cm-editor {
+    height: 100%;
     font-size: 15px;
+  }
+
+  .editorHost .cm-scroller {
+    overflow: auto;
   }
 
 }
