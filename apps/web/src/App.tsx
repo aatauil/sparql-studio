@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { BridgeClient } from "./bridge";
 import {
@@ -14,7 +14,7 @@ import { SplitLayout } from "./SplitLayout";
 import { useSettings, defaultSettings } from "./hooks/useSettings";
 import { useHistoryManager } from "./hooks/useHistoryManager";
 import { useHeapMemory } from "./hooks/useHeapMemory";
-import { useEscapeKey } from "./hooks/useEscapeKey";
+import { useEscapeKey } from "./hooks/useEscapeKey"; // used for localhostModal
 import { useQueryManager } from "./hooks/useQueryManager";
 import { usePrefixManager, useDisplayPrefixes, DisplayPrefixContext } from "./hooks/usePrefixManager";
 import { useEndpointManager } from "./hooks/useEndpointManager";
@@ -25,6 +25,7 @@ import { LocalhostBridgeModal } from "./components/LocalhostBridgeModal";
 import { Group as PanelGroup, Panel, Separator } from "react-resizable-panels";
 import { uid } from "./config";
 import { Button } from "./components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "./components/ui/dialog";
 
 function SparqlEditorSurface({
   value,
@@ -57,32 +58,6 @@ function SparqlEditorSurface({
   return <div className="editorHost" ref={ref} aria-label="SPARQL query editor" />;
 }
 
-function Modal({
-  label,
-  onClose,
-  children
-}: {
-  label: string;
-  onClose: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <div
-      className="fixed inset-0 bg-gray-900/45 grid place-items-center p-4 z-100"
-      onClick={onClose}
-    >
-      <section
-        className="w-full max-w-[560px] max-h-[80vh] overflow-y-auto bg-white border border-gray-300 rounded-xl p-4"
-        role="dialog"
-        aria-modal="true"
-        aria-label={label}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {children}
-      </section>
-    </div>
-  );
-}
 
 function App() {
   const navigate = useNavigate();
@@ -120,7 +95,6 @@ function App() {
 
   const bridge = useMemo(() => new BridgeClient(settings.extensionId), [settings.extensionId]);
 
-  useEscapeKey(settingsOpen, () => setSettingsOpen(false));
   useEscapeKey(localhostModalOpen, () => setLocalhostModalOpen(false));
 
   // ── Query execution ───────────────────────────────────────────────────────
@@ -275,22 +249,26 @@ function App() {
     <DisplayPrefixContext.Provider value={displayPrefixes}>
     <main className="h-screen overflow-hidden flex flex-col bg-zinc-900">
       {/* Top toolbar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 text-sm shrink-0">
-        <button
-          className="btn-dark shrink-0 text-base leading-none px-2"
+      <div className="dark flex items-center gap-2 px-3 py-1.5 text-sm shrink-0">
+        <Button
+          variant="secondary"
+          size="sm"
+          className="shrink-0 text-base leading-none px-2"
           onClick={() => setSidebarOpen((v) => !v)}
           title={sidebarOpen ? "Hide panel" : "Show panel"}
         >
           <i className="ri-layout-left-line" />
-        </button>
+        </Button>
         <span className="font-semibold text-white shrink-0">SPARQL Studio</span>
-        <button
-          className="btn-dark text-xs shrink-0"
+        <Button
+          variant="secondary"
+          size="sm"
+          className="shrink-0"
           onClick={() => navigate("/graphs")}
           title="Graph Explorer"
         >
           <i className="ri-node-tree" /> Graphs
-        </button>
+        </Button>
         <EndpointPicker
           endpoints={em.endpoints}
           activeId={em.activeEndpointId}
@@ -352,19 +330,22 @@ function App() {
       </div>
 
       {/* Localhost bridge modal */}
-      {localhostModalOpen && em.activeEndpoint && (
+      {em.activeEndpoint && (
         <LocalhostBridgeModal
+          open={localhostModalOpen}
+          onOpenChange={setLocalhostModalOpen}
           endpointUrl={em.activeEndpoint.url}
           savedExtensionId={settings.extensionId}
-          onClose={() => setLocalhostModalOpen(false)}
           onVerify={verifyBridge}
         />
       )}
 
-      {/* Settings modal */}
-      {settingsOpen && (
-        <Modal label="Settings" onClose={() => setSettingsOpen(false)}>
-          <h2 className="mt-0">Settings</h2>
+      {/* Settings dialog */}
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Settings</DialogTitle>
+          </DialogHeader>
           <label className="field-label">
             Query timeout (ms)
             <input
@@ -375,7 +356,7 @@ function App() {
               onChange={(e) => setSettingsDraft({ ...settingsDraft, timeoutMs: Number(e.target.value) })}
             />
           </label>
-          <div className="flex gap-2 mt-3">
+          <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setSettingsOpen(false)}>Cancel</Button>
             <Button
               size="sm"
@@ -388,10 +369,9 @@ function App() {
             >
               Save
             </Button>
-            <button className="btn" onClick={() => setSettingsOpen(false)}>Cancel</button>
-          </div>
-        </Modal>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
     </DisplayPrefixContext.Provider>
   );

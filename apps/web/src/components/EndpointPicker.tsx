@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { EndpointEntry } from "../storage";
 import { Button } from "./ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 interface EndpointPickerProps {
   endpoints: EndpointEntry[];
@@ -15,21 +16,8 @@ export function EndpointPicker({ endpoints, activeId, error, onSelect, onAdd, on
   const [open, setOpen] = useState(false);
   const [addLabel, setAddLabel] = useState("");
   const [addUrl, setAddUrl] = useState("");
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const active = endpoints.find((e) => e.id === activeId);
-
-  useEffect(() => {
-    function handleMouseDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    if (open) document.addEventListener("mousedown", handleMouseDown);
-    return () => document.removeEventListener("mousedown", handleMouseDown);
-  }, [open]);
-
-  useEscapeKey(open, () => setOpen(false));
 
   async function handleAdd() {
     const label = addLabel.trim();
@@ -41,65 +29,70 @@ export function EndpointPicker({ endpoints, activeId, error, onSelect, onAdd, on
   }
 
   return (
-    <div ref={containerRef} className="relative">
-      <button
-        className="btn-dark flex items-center gap-1.5 max-w-[220px]"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className="truncate text-xs">{active?.label ?? active?.url ?? "Select endpoint"}</span>
-        <i className="ri-arrow-down-s-line shrink-0 opacity-60 text-sm" />
-      </button>
-
-      {open && (
-        <div
-          className="absolute top-full left-0 mt-1 w-72 bg-[#2d2d2d] border border-[#555] rounded shadow-lg z-50"
-          role="listbox"
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="max-w-[220px]"
+          aria-haspopup="listbox"
+          aria-expanded={open}
         >
-          {error && (
-            <p className="px-3 py-3 text-xs text-red-400">{error}</p>
-          )}
-          {!error && endpoints.map((ep) => (
-            <div
-              key={ep.id}
-              className={`group flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-[#3c3c3c] ${
-                ep.id === activeId ? "bg-[#3c3c3c] border-l-2 border-blue-400" : ""
-              }`}
-              role="option"
-              aria-selected={ep.id === activeId}
-              onClick={() => { onSelect(ep.id); setOpen(false); }}
-            >
-              <div className="min-w-0 flex-1">
-                <p className="text-xs text-[#ccc] truncate">{ep.label}</p>
-                <p className="text-[0.6rem] text-[#888] truncate">{ep.url}</p>
-              </div>
-              {endpoints.length > 1 && (
-                <button
-                  className="shrink-0 ml-2 text-[#888] hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs px-1"
-                  onClick={(e) => { e.stopPropagation(); onRemove(ep.id); }}
-                  title="Remove endpoint"
-                >
-                  <i className="ri-close-line" />
-                </button>
-              )}
+          <span className="truncate text-xs">{active?.label ?? active?.url ?? "Select endpoint"}</span>
+          <i className="ri-arrow-down-s-line shrink-0 opacity-60 text-sm" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        sideOffset={4}
+        className="dark w-72 p-0 bg-[#2d2d2d] border-[#555]"
+        role="listbox"
+      >
+        {error && (
+          <p className="px-3 py-3 text-xs text-red-400">{error}</p>
+        )}
+        {!error && endpoints.map((ep) => (
+          <div
+            key={ep.id}
+            className={`group flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-[#3c3c3c] ${
+              ep.id === activeId ? "bg-[#3c3c3c] border-l-2 border-blue-400" : ""
+            }`}
+            role="option"
+            aria-selected={ep.id === activeId}
+            onClick={() => { onSelect(ep.id); setOpen(false); }}
+          >
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-[#ccc] truncate">{ep.label}</p>
+              <p className="text-[0.6rem] text-[#888] truncate">{ep.url}</p>
             </div>
-          ))}
+            {endpoints.length > 1 && (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="shrink-0 ml-2 text-[#888] hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => { e.stopPropagation(); onRemove(ep.id); }}
+                title="Remove endpoint"
+              >
+                <i className="ri-close-line" />
+              </Button>
+            )}
+          </div>
+        ))}
 
-          <div className="border-t border-[#444] p-2 flex flex-col gap-1.5">
-            <input
-              className="w-full bg-[#1e1e1e] border border-[#555] rounded px-2 py-1 text-xs text-[#ccc] placeholder-[#666] focus:outline-none focus:border-blue-500"
-              placeholder="Label (e.g. Wikidata)"
-              value={addLabel}
-              onChange={(e) => setAddLabel(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") void handleAdd(); }}
-            />
-            <input
-              className="w-full bg-[#1e1e1e] border border-[#555] rounded px-2 py-1 text-xs text-[#ccc] placeholder-[#666] focus:outline-none focus:border-blue-500"
-              placeholder="URL (e.g. https://query.wikidata.org/sparql)"
-              value={addUrl}
-              onChange={(e) => setAddUrl(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") void handleAdd(); }}
+        <div className="border-t border-[#444] p-2 flex flex-col gap-1.5">
+          <input
+            className="w-full bg-[#1e1e1e] border border-[#555] rounded px-2 py-1 text-xs text-[#ccc] placeholder-[#666] focus:outline-none focus:border-blue-500"
+            placeholder="Label (e.g. Wikidata)"
+            value={addLabel}
+            onChange={(e) => setAddLabel(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") void handleAdd(); }}
+          />
+          <input
+            className="w-full bg-[#1e1e1e] border border-[#555] rounded px-2 py-1 text-xs text-[#ccc] placeholder-[#666] focus:outline-none focus:border-blue-500"
+            placeholder="URL (e.g. https://query.wikidata.org/sparql)"
+            value={addUrl}
+            onChange={(e) => setAddUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") void handleAdd(); }}
           />
           <Button
             variant="secondary"
@@ -110,7 +103,7 @@ export function EndpointPicker({ endpoints, activeId, error, onSelect, onAdd, on
             Add endpoint
           </Button>
         </div>
-      )}
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }
